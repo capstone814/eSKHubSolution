@@ -1,0 +1,299 @@
+﻿@using MudBlazor
+@using eSKHub.Components.Model
+@using eSKHub.Model
+@using System.Security.Cryptography
+@using System.Text
+@using System.Text.RegularExpressions
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        EDIT USER
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_editUser">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Full Name"
+                                  @bind-Value="_editUser.Fullname"
+                                  Required="true"
+                                  RequiredError="Full name is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Username"
+                                  @bind-Value="_editUser.Username"
+                                  Required="true"
+                                  RequiredError="Username is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Email"
+                                  @bind-Value="_editUser.Email"
+                                  Required="true"
+                                  RequiredError="Email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                               Label="Position"
+                               @bind-Value="_editUser.Position"
+                               Required="true"
+                               RequiredError="Position is required"
+                               Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string"
+                               Label="Role"
+                               Value="@_editUser.Role"
+                               ValueChanged="@((string value) => { _editUser.Role = value; OnRoleChanged(value); })"
+                               Required="true"
+                               RequiredError="Role is required"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Council")">Council</MudSelectItem>
+                        <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string"
+                               Label="@(_editUser.Role == "Select" ? "Select Role" : _editUser.Role == "Admin" ? "Municipality" : "Barangay")"
+                               @bind-Value="_editUser.Area"
+                               Required="true"
+                               RequiredError="@(_editUser.Role == "Select" ? "Area is required" : _editUser.Role == "Admin" ? "Municipality is required" : "Barangay is required")"
+                               Variant="Variant.Outlined"
+                               Disabled="@(_editUser.Role == "Select")">
+                        @if (_editUser.Role == "Admin")
+                        {
+                            @foreach (var area in _municipalities)
+                            {
+                                <MudSelectItem Value="@area.Name">@area.Name</MudSelectItem>
+                            }
+                        }
+                        else if (_editUser.Role == "Council")
+                        {
+                            @foreach (var area in _barangays)
+                            {
+                                <MudSelectItem Value="@area.Name">@area.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Password"
+                                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                  @bind-Value="_password"
+                                  Placeholder="Leave blank to keep current password"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="TogglePasswordVisibility"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Confirm Password"
+                                  InputType="@(_showConfirmPassword ? InputType.Text : InputType.Password)"
+                                  @bind-Value="_confirmPassword"
+                                  Immediate="true"
+                                  Validation="@(new Func<string, string?>(ValidateConfirmPassword))"
+                                  Disabled="@string.IsNullOrEmpty(_password)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showConfirmPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="ToggleConfirmPasswordVisibility"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    [Parameter] public User UserToEdit { get; set; } = default!;
+
+    private User _editUser = new();
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+
+    private bool _showPassword = false;
+    private bool _showConfirmPassword = false;
+
+    private List<Area> _municipalities = new();
+    private List<Area> _barangays = new();
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string _previousRole = string.Empty;
+
+    private void OnRoleChanged(string newRole) // Removed async since no await
+    {
+        if (_previousRole != newRole)
+        {
+            _editUser.Area = string.Empty; // Clear the area field
+            _previousRole = newRole;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnInitializedAsync() // Changed to async and renamed
+    {
+        _editUser.Id = UserToEdit.Id;
+        _editUser.Username = UserToEdit.Username;
+        _editUser.Email = UserToEdit.Email;
+        _editUser.Role = UserToEdit.Role ?? "Admin";
+        _editUser.Fullname = UserToEdit.Fullname;
+        _editUser.Position = UserToEdit.Position;
+        _editUser.Area = UserToEdit.Area;
+
+        _previousRole = _editUser.Role; // Store initial role
+
+        await LoadAreas(); // Load areas on initialization
+    }
+
+
+    private async Task LoadAreas()
+    {
+        _municipalities = await Db.Areas.Where(a => a.Type == "Municipality").OrderBy(a => a.Name).ToListAsync();
+        _barangays = await Db.Areas.Where(a => a.Type == "Barangay").OrderBy(a => a.Name).ToListAsync();
+    }
+
+    protected override void OnInitialized()
+    {
+        _editUser.Id = UserToEdit.Id;
+        _editUser.Username = UserToEdit.Username;
+        _editUser.Email = UserToEdit.Email;
+        _editUser.Role = UserToEdit.Role ?? "Admin";
+        _editUser.Fullname = UserToEdit.Fullname;
+        _editUser.Position = UserToEdit.Position;
+        _editUser.Area = UserToEdit.Area;
+        _editUser.Password = "";
+    }
+
+    private string? ValidateConfirmPassword(string confirmPassword)
+    {
+        if (!string.IsNullOrEmpty(_password) && confirmPassword != _password)
+            return "Passwords do not match";
+        return null;
+    }
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address (e.g., example@mail.com)";
+
+        return null;
+    }
+
+    private static string HashPassword(string password)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(password);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        _isSaving = true;
+
+        try
+        {
+            // Check for existing username
+            var existingUsername = Db.Users
+                .FirstOrDefault(u => u.Id != _editUser.Id &&
+                                   u.Username != null &&
+                                   u.Username.ToLower() == _editUser.Username.ToLower());
+
+            if (existingUsername != null)
+            {
+                Snackbar.Add("Username already exists. Please choose a different username.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            // Check for existing email
+            var existingEmail = Db.Users
+                .FirstOrDefault(u => u.Id != _editUser.Id &&
+                                   u.Email != null &&
+                                   u.Email.ToLower() == (_editUser.Email ?? "").ToLower());
+
+            if (existingEmail != null)
+            {
+                Snackbar.Add("Email already exists. Please use a different email address.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            var userInDb = await Db.Users.FindAsync(_editUser.Id);
+            if (userInDb != null)
+            {
+                userInDb.Username = _editUser.Username;
+                userInDb.Email = _editUser.Email;
+                userInDb.Role = _editUser.Role;
+                userInDb.Fullname = _editUser.Fullname;
+                userInDb.Position = _editUser.Position;
+                userInDb.Area = _editUser.Area;
+
+                if (!string.IsNullOrEmpty(_password))
+                {
+                    userInDb.Password = HashPassword(_password);
+                }
+
+                await Db.SaveChangesAsync();
+                Snackbar.Add("User updated successfully!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating user: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void TogglePasswordVisibility() => _showPassword = !_showPassword;
+    private void ToggleConfirmPasswordVisibility() => _showConfirmPassword = !_showConfirmPassword;
+
+    private void Cancel() => MudDialog.Cancel();
+}

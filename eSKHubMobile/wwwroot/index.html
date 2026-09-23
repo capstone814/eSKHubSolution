@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>eSKHubMobile</title>
+    <base href="/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="eSKHubMobile.styles.css" />
+    <link rel="icon" href="data:,">
+</head>
+
+<body>
+
+    <div class="status-bar-safe-area"></div>
+
+    <div id="app">
+        <style>
+            .loading-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                width: 100vw;
+                background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #1d4ed8 100%);
+                color: white;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                position: fixed;
+                top: 0;
+                left: 0;
+                z-index: 9999;
+            }
+
+            .loader-wrapper {
+                position: relative;
+                width: 120px;
+                height: 120px;
+                margin-bottom: 2rem;
+            }
+
+            .loader-circle {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                border-top: 4px solid #ffffff;
+                border-radius: 50%;
+                animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+            }
+
+            .loader-inner {
+                position: absolute;
+                top: 15px;
+                left: 15px;
+                right: 15px;
+                bottom: 15px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                backdrop-filter: blur(4px);
+            }
+
+                .loader-inner img {
+                    width: 50px;
+                    height: 50px;
+                    opacity: 0.9;
+                    filter: brightness(0) invert(1);
+                }
+
+            .loading-text {
+                font-size: 1.5rem;
+                font-weight: 600;
+                letter-spacing: 0.05em;
+                margin-bottom: 0.5rem;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            }
+
+            .loading-subtext {
+                font-size: 0.875rem;
+                opacity: 0.7;
+                font-weight: 400;
+            }
+
+            .branding {
+                position: absolute;
+                bottom: 2rem;
+                font-size: 0.75rem;
+                opacity: 0.5;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+            }
+
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+
+            @keyframes pulse {
+                0%, 100% {
+                    opacity: 0.5;
+                }
+
+                50% {
+                    opacity: 1;
+                }
+            }
+        </style>
+        <div class="loading-container">
+            <div class="loader-wrapper">
+                <div class="loader-circle"></div>
+                <div class="loader-inner">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29L12 2Z" fill="white" />
+                    </svg>
+                </div>
+            </div>
+            <div class="loading-text">eSKHub</div>
+            <div class="loading-subtext">Initializing digital experience...</div>
+            <div class="branding">Powered by SK Federation of Bacacay</div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+
+</body>
+
+</html>

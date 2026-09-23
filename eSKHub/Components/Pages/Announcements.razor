@@ -1,0 +1,746 @@
+@page "/announcements-manage"
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using eSKHub.Components.Dialogs
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Manage Announcements</PageTitle>
+
+<style>
+    .announcement-card {
+        margin-bottom: 16px;
+        border-left: 4px solid #7e6fff;
+        transition: transform 0.2s ease;
+    }
+
+        .announcement-card:hover {
+            transform: translateX(4px);
+        }
+
+    .announcement-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, rgba(126, 111, 255, 0.1) 0%, rgba(126, 111, 255, 0.05) 100%);
+    }
+
+    .announcement-body {
+        padding: 16px;
+    }
+
+    .announcement-short-desc {
+        padding: 0 16px 8px;
+        font-style: italic;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .announcement-meta {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .add-announcement-btn {
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+
+    .button-group {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 0px;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    @@media (max-width: 600px) {
+        .desktop-cards {
+            display: none;
+        }
+        .announcement-card {
+            display: none;
+        }
+
+        .mobile-cards {
+            display: block;
+        }
+
+        .announcement-mobile-card {
+            margin-bottom: 12px;
+            border-left: 4px solid #7e6fff;
+        }
+
+        .announcement-mobile-header {
+            background-color: #7e6fff;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-right-radius: 4px;
+        }
+
+        .announcement-mobile-content {
+            padding: 16px;
+        }
+
+        .announcement-mobile-actions {
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+            padding: 10px 16px;
+        }
+
+            .announcement-mobile-actions .mud-button-root {
+                flex: 1;
+                min-width: 0;
+            }
+
+        .announcement-field-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .announcement-field-value {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+        .announcement-meta {
+            font-size: 0.85rem;
+        }
+
+        .add-announcement-btn {
+            width: 100%;
+            margin-bottom: 12px;
+            margin-top: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+    }
+</style>
+
+<div class="button-group">
+    <MudButton Class="add-announcement-btn"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add"
+               Color="Color.Info"
+               Size="Size.Small"
+               OnClick="OpenAddAnnouncementDialog">
+        ANNOUNCEMENT
+    </MudButton>
+</div>
+
+<!-- Filter Section -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <!-- Mobile Filter Toggle Button -->
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudTextField T="string"
+                          @bind-Value="_searchTerm"
+                          @bind-Value:after="ApplyFilters"
+                          Label="Search Announcements"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="Subject, description..."
+                          Immediate="true"
+                          DebounceInterval="300"
+                          Dense="true"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_statusFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                <MudSelectItem Value="@("Published")">Published</MudSelectItem>
+                <MudSelectItem Value="@("Draft")">Draft</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_authorFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Author"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Authors</MudSelectItem>
+                @foreach (var author in _authors)
+                {
+                    <MudSelectItem Value="@author">@author</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_audienceTypeFilter"
+                       @bind-Value:after="OnAudienceTypeFilterChanged"
+                       Label="Audience Type"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Audience</MudSelectItem>
+                <MudSelectItem Value="@("Municipality")">Municipality</MudSelectItem>
+                <MudSelectItem Value="@("Barangay")">Barangay</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_specificAreaFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Specific Area"
+                       Variant="Variant.Outlined"
+                       Disabled="@(_audienceTypeFilter == "All")"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Areas</MudSelectItem>
+                @foreach (var area in _availableAreas)
+                {
+                    <MudSelectItem Value="@area">@area</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Showing @_pagedAnnouncements.Count of @_filteredAnnouncements.Count announcements
+                </MudText>
+                @if (HasActiveFilters())
+                {
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="ClearFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Elevation="0" Class="pa-4">
+    @if (_pagedAnnouncements == null || !_pagedAnnouncements.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            @if (HasActiveFilters())
+            {
+                <text>No announcements found matching your filters.</text>
+            }
+            else
+            {
+                <text>No announcements yet. Create your first announcement!</text>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Desktop View -->
+        <div class="desktop-cards">
+            @foreach (var announcement in _pagedAnnouncements)
+            {
+                <MudCard Class="announcement-card" Elevation="2">
+                    <div class="announcement-header">
+                        <div>
+                            <MudText Typo="Typo.h6" Style="font-weight: 600;">@announcement.Subject</MudText>
+                            <div class="announcement-meta">
+                                <MudChip T="string" Size="Size.Small" Color="@(announcement.IsPublished? Color.Success: Color.Default)">
+                                    @(announcement.IsPublished ? "Published" : "Draft")
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                    @(announcement.Audience == "Barangay" ? $"Barangay: {announcement.TargetBarangay}" : "Public")
+                                </MudChip>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="display: flex; align-items: center; gap: 6px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                    @announcement.Author (@announcement.AuthorPosition - @announcement.AuthorArea)
+                                </MudText>
+
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="display: flex; align-items: center; gap: 6px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                                    @announcement.DateCreated.ToString("MMM dd, yyyy • hh:mm tt")
+                                </MudText>
+
+                                @if (announcement.DateModified.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                             Style="display: flex; align-items: center; gap: 6px;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                        Updated: @announcement.DateModified.Value.ToString("MMM dd, yyyy • hh:mm tt")
+                                    </MudText>
+                                }
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           Disabled="@announcement.IsPublished"
+                                           OnClick="@(() => EditAnnouncement(announcement))"
+                                           Title="@(announcement.IsPublished ? "Cannot edit a published announcement" : "Edit")" />
+                            <MudIconButton Icon="@(announcement.IsPublished? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           OnClick="@(() => TogglePublish(announcement))"
+                                           Title="@(announcement.IsPublished ? "Unpublish" : "Publish")" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteAnnouncement(announcement))"
+                                           Title="Delete" />
+                        </div>
+                    </div>
+                    <div class="announcement-short-desc">
+                        <MudText Typo="Typo.body2">@announcement.ShortDescription</MudText>
+                    </div>
+                    <div class="announcement-body">
+                        <MudText Typo="Typo.body2" Style="display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">
+                            @announcement.Body
+                        </MudText>
+                    </div>
+                    @if (announcement.AttachmentData != null && announcement.AttachmentData.Length > 0)
+                    {
+                        <MudCardActions>
+                            <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Color="Color.Secondary">
+                                @(announcement.AttachmentType == "image" ? "Image attached" : "Document attached")
+                            </MudChip>
+                        </MudCardActions>
+                    }
+                </MudCard>
+            }
+
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="mobile-cards">
+            @if (_pagedAnnouncements.Any())
+            {
+                @for (int i = 0; i < _pagedAnnouncements.Count; i++)
+                {
+                    var announcement = _pagedAnnouncements[i];
+                    var index = (_currentPage - 1) * _pageSize + i + 1;
+
+                    <MudCard Class="announcement-mobile-card" Elevation="2">
+                        <div class="announcement-mobile-header">
+                            <span><strong>Announcement #@index</strong></span>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(announcement.IsPublished ? Color.Success : Color.Default)"
+                                     Style="background: rgba(255,255,255,0.3); color: white;">
+                                @(announcement.IsPublished ? "Published" : "Draft")
+                            </MudChip>
+                        </div>
+                        <div class="announcement-mobile-content">
+                            <MudText Typo="Typo.body2" Class="announcement-field-label">
+                                <strong>Subject:</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="announcement-field-value">
+                                @announcement.Subject
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Class="announcement-field-label">
+                                <strong>Author:</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="announcement-field-value">
+                                @announcement.Author (@announcement.AuthorPosition - @announcement.AuthorArea)
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Class="announcement-field-label">
+                                <strong>Audience:</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="announcement-field-value">
+                                @(announcement.Audience == "Barangay" ? $"Barangay: {announcement.TargetBarangay}" : "Public")
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Class="announcement-field-label">
+                                <strong>Date Created:</strong>
+                            </MudText>
+                            <MudText Typo="Typo.body1" Class="announcement-field-value">
+                                @announcement.DateCreated.ToString("MMM dd, yyyy • hh:mm tt")
+                            </MudText>
+                        </div>
+                        <div class="announcement-mobile-actions">
+                            <MudIconButton Variant="Variant.Filled"
+                                           Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => EditAnnouncement(announcement))" />
+                            <MudIconButton Variant="Variant.Filled"
+                                           Icon="@(announcement.IsPublished ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           OnClick="@(() => TogglePublish(announcement))" />
+                            <MudIconButton Variant="Variant.Filled"
+                                           Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteAnnouncement(announcement))" />
+                        </div>
+                    </MudCard>
+                }
+            }
+        </div>
+
+        <!-- Pagination -->
+        <div style="display: flex; justify-content: center; margin-top: 24px;">
+            <MudPagination Count="@_totalPages"
+                           Selected="@_currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           ShowFirstButton="true"
+                           ShowLastButton="true" />
+        </div>
+    }
+</MudPaper>
+@code {
+    private bool _showFilters = false;
+
+    private List<Announcement> _allAnnouncements = new();
+    private List<Announcement> _filteredAnnouncements = new();
+    private List<Announcement> _pagedAnnouncements = new();
+    private List<Area> _allAreas = new();
+    private List<string> _availableAreas = new();
+    private List<string> _authors = new();
+    private bool _initialized = false;
+
+    // Filter variables
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "All";
+    private string _audienceTypeFilter = "All";
+    private string _specificAreaFilter = "All";
+    private string _authorFilter = "All";
+
+    // Pagination variables
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int _totalPages = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await UserState.InitializeAsync();
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        // Load all announcements
+        _allAnnouncements = await db.Announcements
+            .OrderByDescending(a => a.DateCreated)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Load all areas
+        _allAreas = await db.Areas
+            .OrderBy(a => a.Type)
+            .ThenBy(a => a.Name)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Get unique authors
+        _authors = _allAnnouncements
+            .Where(a => !string.IsNullOrEmpty(a.Author))
+            .Select(a => a.Author!)
+            .Distinct()
+            .OrderBy(a => a)
+            .ToList();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private async Task LoadAnnouncements()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _allAnnouncements = await db.Announcements
+            .OrderByDescending(a => a.DateCreated)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Update authors list
+        _authors = _allAnnouncements
+            .Where(a => !string.IsNullOrEmpty(a.Author))
+            .Select(a => a.Author!)
+            .Distinct()
+            .OrderBy(a => a)
+            .ToList();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredAnnouncements = _allAnnouncements;
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredAnnouncements = _filteredAnnouncements.Where(a =>
+                (a.Subject?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.ShortDescription?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (a.Body?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        // Apply status filter
+        if (_statusFilter != "All")
+        {
+            bool isPublished = _statusFilter == "Published";
+            _filteredAnnouncements = _filteredAnnouncements.Where(a => a.IsPublished == isPublished).ToList();
+        }
+
+        // Apply area type filter
+        if (_audienceTypeFilter != "All")
+        {
+            var areasOfType = _allAreas
+                .Where(a => a.Type == _audienceTypeFilter)
+                .Select(a => a.Name)
+                .ToList();
+
+            _filteredAnnouncements = _filteredAnnouncements
+                .Where(a => !string.IsNullOrEmpty(a.AuthorArea) && areasOfType.Contains(a.AuthorArea))
+                .ToList();
+        }
+
+        // Apply specific area filter
+        if (_specificAreaFilter != "All")
+        {
+            _filteredAnnouncements = _filteredAnnouncements
+                .Where(a => a.AuthorArea == _specificAreaFilter)
+                .ToList();
+        }
+
+        // Apply author filter
+        if (_authorFilter != "All")
+        {
+            _filteredAnnouncements = _filteredAnnouncements.Where(a => a.Author == _authorFilter).ToList();
+        }
+
+        // Reset to first page when filters change
+        _currentPage = 1;
+        UpdatePagination();
+    }
+
+    private void UpdatePagination()
+    {
+        _totalPages = (int)Math.Ceiling(_filteredAnnouncements.Count / (double)_pageSize);
+        if (_totalPages == 0) _totalPages = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _pagedAnnouncements = _filteredAnnouncements
+            .Skip(skip)
+            .Take(_pageSize)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+        UpdatePagination();
+    }
+
+    private void OnAudienceTypeFilterChanged()
+    {
+        // Reset specific area filter when area type changes
+        _specificAreaFilter = "All";
+
+        // Update available areas based on selected type
+        if (_audienceTypeFilter == "All")
+        {
+            _availableAreas = new List<string>();
+        }
+        else
+        {
+            _availableAreas = _allAreas
+                .Where(a => a.Type == _audienceTypeFilter)
+                .Select(a => a.Name)
+                .OrderBy(n => n)
+                .ToList();
+        }
+
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _statusFilter = "All";
+        _audienceTypeFilter = "All";
+        _specificAreaFilter = "All";
+        _authorFilter = "All";
+        _availableAreas = new List<string>();
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _statusFilter != "All" ||
+               _audienceTypeFilter != "All" ||
+               _specificAreaFilter != "All" ||
+               _authorFilter != "All";
+    }
+
+    private async Task OpenAddAnnouncementDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<AddAnnouncementForm>("Create Announcement", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadAnnouncements();
+            Snackbar.Add("Announcement created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task EditAnnouncement(Announcement announcement)
+    {
+        var parameters = new DialogParameters
+        {
+            { "AnnouncementToEdit", announcement }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditAnnouncementForm>("Edit Announcement", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadAnnouncements();
+            Snackbar.Add("Announcement updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task TogglePublish(Announcement announcement)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var announcementInDb = await db.Announcements.FindAsync(announcement.Id);
+
+        if (announcementInDb != null)
+        {
+            announcementInDb.IsPublished = !announcementInDb.IsPublished;
+            await db.SaveChangesAsync();
+
+            await LoadAnnouncements();
+            Snackbar.Add(
+                announcementInDb.IsPublished ? "Announcement published!" : "Announcement unpublished!",
+                Severity.Info
+            );
+        }
+    }
+
+    private async Task DeleteAnnouncement(Announcement announcement)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete '{announcement.Subject}'? This action cannot be undone." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters, options);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var announcementToDelete = await db.Announcements.FindAsync(announcement.Id);
+
+            if (announcementToDelete != null)
+            {
+                db.Announcements.Remove(announcementToDelete);
+                await db.SaveChangesAsync();
+            }
+
+            await LoadAnnouncements();
+            Snackbar.Add("Announcement deleted successfully!", Severity.Success);
+        }
+    }
+}

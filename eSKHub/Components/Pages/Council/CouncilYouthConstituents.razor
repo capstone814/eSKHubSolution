@@ -1,0 +1,529 @@
+﻿@page "/council/youth-constituents"
+@layout eSKHub.Components.Layout.CouncilLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Dialogs
+@using eSKHub.Components.Pages.Dialogs
+@using YouthModel = eSKHub.Components.Model.Youth
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Youth Constituents</PageTitle>
+
+<style>
+    .desktop-table {
+        display: block;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    .youth-profile-img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .page-header {
+        margin-bottom: 24px;
+    }
+
+    .barangay-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        display: inline-block;
+        font-weight: 600;
+    }
+
+    @@media (max-width: 600px) {
+        .desktop-table {
+            display: none;
+        }
+
+        .mobile-cards {
+            display: block;
+        }
+
+        .youth-card {
+            margin-bottom: 12px;
+            border-left: 4px solid #7e6fff;
+        }
+
+        .youth-card-header {
+            background-color: #7e6fff;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-right-radius: 4px;
+        }
+
+        .youth-card-content {
+            padding: 16px;
+        }
+
+        .youth-card-actions {
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+            justify-content: center;
+            padding: 10px 16px;
+        }
+
+            .youth-card-actions .mud-button-root {
+                flex: 1;
+                min-width: 0;
+            }
+
+        .youth-card-field-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .youth-card-field-value {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .youth-profile-img-mobile {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 12px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+    }
+</style>
+
+@if (!_isAuthorized)
+{
+    <MudAlert Severity="Severity.Warning" Class="ma-4">
+        <MudText>You are not authorized to view this page. Please contact your administrator.</MudText>
+    </MudAlert>
+}
+else if (_isLoading)
+{
+    <div style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+    </div>
+}
+else
+{
+
+    <!-- Filter Section -->
+    <MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+        <MudButton Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+                   FullWidth="true"
+                   OnClick="@(() => _showFilters = !_showFilters)"
+                   Class="filter-toggle-button">
+            @(_showFilters ? "Hide Filters" : "Show Filters")
+        </MudButton>
+
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6" md="6">
+                <MudTextField T="string"
+                              @bind-Value="_searchTerm"
+                              @bind-Value:after="ApplyFilters"
+                              Label="Search Youth"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Placeholder="Name, email, contact..."
+                              Immediate="true"
+                              DebounceInterval="300"
+                              Dense="true"
+                              Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="string"
+                           @bind-Value="_genderFilter"
+                           @bind-Value:after="ApplyFilters"
+                           Label="Gender"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Margin="Margin.Dense">
+                    <MudSelectItem Value="@("All")">All</MudSelectItem>
+                    <MudSelectItem Value="@("Male")">Male</MudSelectItem>
+                    <MudSelectItem Value="@("Female")">Female</MudSelectItem>
+                    <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="string"
+                           @bind-Value="_skVoterFilter"
+                           @bind-Value:after="ApplyFilters"
+                           Label="SK Voter"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Margin="Margin.Dense">
+                    <MudSelectItem Value="@("All")">All</MudSelectItem>
+                    <MudSelectItem Value="@("Yes")">Yes</MudSelectItem>
+                    <MudSelectItem Value="@("No")">No</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudSelect T="string"
+                           @bind-Value="_statusFilter"
+                           @bind-Value:after="ApplyFilters"
+                           Label="Status"
+                           Variant="Variant.Outlined"
+                           Dense="true"
+                           Margin="Margin.Dense">
+                    <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                    <MudSelectItem Value="@("Active")">Active</MudSelectItem>
+                    <MudSelectItem Value="@("Inactive")">Inactive</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid>
+            <MudItem xs="12">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Showing @_filteredYouths.Count of @_allYouths.Count youth constituents
+                    </MudText>
+                    @if (HasActiveFilters())
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <!-- Desktop Table View -->
+    <div class="desktop-table">
+        <MudPaper Class="custom-paper" Elevation="1" Style="border-top: 5px solid #7e6fff; border-radius:4px;">
+            <MudTable Items="_filteredYouths" Hover="true" Bordered="true" Striped="true">
+                <HeaderContent>
+                    <MudTh>No.</MudTh>
+                    <MudTh>Profile</MudTh>
+                    <MudTh>Full Name</MudTh>
+                    <MudTh>Age</MudTh>
+                    <MudTh>Gender</MudTh>
+                    <MudTh>Contact</MudTh>
+                    <MudTh>SK Voter</MudTh>
+                    <MudTh>Status</MudTh>
+                    <MudTh>Action</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="No.">@(_filteredYouths.ToList().IndexOf(context) + 1)</MudTd>
+                    <MudTd DataLabel="Profile">
+                        <img src="@GetYouthImagePath(context)" alt="Profile" class="youth-profile-img" />
+                    </MudTd>
+                    <MudTd DataLabel="Full Name">@context.FullName</MudTd>
+                    <MudTd DataLabel="Age">@context.Age</MudTd>
+                    <MudTd DataLabel="Gender">@context.Gender</MudTd>
+                    <MudTd DataLabel="Contact">@context.ContactNumber</MudTd>
+                    <MudTd DataLabel="SK Voter">
+                        @if (context.IsSKVoter)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Yes</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Default">No</MudChip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Status">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(context.Status == "Active" ? Color.Success : Color.Default)">
+                            @context.Status
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Action">
+                        <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ViewYouth(context))"
+                                       Title="View details" />
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+                </PagerContent>
+            </MudTable>
+        </MudPaper>
+    </div>
+
+    <!-- Mobile Card View -->
+    <div class="mobile-cards">
+        @if (_filteredYouths.Any())
+        {
+            @for (int i = 0; i < _filteredYouths.Count; i++)
+            {
+                var youth = _filteredYouths[i];
+                var index = i + 1;
+                <MudCard Class="youth-card" Elevation="2">
+                    <div class="youth-card-header">
+                        <span><strong>Youth #@index</strong></span>
+                    </div>
+                    <div class="youth-card-content">
+                        <div style="text-align: center;">
+                            <img src="@GetYouthImagePath(youth)" alt="Profile" class="youth-profile-img-mobile" />
+                        </div>
+
+                        <MudText Typo="Typo.body2" Color="Color.Default" Class="youth-card-field-label">
+                            <strong>Full Name:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="youth-card-field-value">@youth.FullName</MudText>
+
+                        <MudText Typo="Typo.body2" Color="Color.Default" Class="youth-card-field-label">
+                            <strong>Age:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="youth-card-field-value">@youth.Age years old</MudText>
+
+                        <MudText Typo="Typo.body2" Color="Color.Default" Class="youth-card-field-label">
+                            <strong>Contact:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="youth-card-field-value">@youth.ContactNumber</MudText>
+
+                        <MudText Typo="Typo.body2" Color="Color.Default" Class="youth-card-field-label">
+                            <strong>SK Voter:</strong>
+                        </MudText>
+                        <MudChip T="string" Size="Size.Small" Class="youth-card-field-value"
+                                 Color="@(youth.IsSKVoter ? Color.Success : Color.Default)">
+                            @(youth.IsSKVoter ? "Yes" : "No")
+                        </MudChip>
+
+                        <MudText Typo="Typo.body2" Color="Color.Default" Class="youth-card-field-label">
+                            <strong>Status:</strong>
+                        </MudText>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(youth.Status == "Active" ? Color.Success : Color.Default)">
+                            @youth.Status
+                        </MudChip>
+                    </div>
+                    <div class="youth-card-actions">
+                        <MudButton Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                   Color="Color.Info"
+                                   Size="Size.Small"
+                                   OnClick="@(() => ViewYouth(youth))">
+                            View Details
+                        </MudButton>
+                    </div>
+                </MudCard>
+            }
+        }
+        else
+        {
+            <MudCard Elevation="1" Style="padding: 15px; text-align: center;">
+                <MudText Typo="Typo.body1" Color="Color.Default">
+                    @if (HasActiveFilters())
+                    {
+                        <text>No youth constituents found matching your filters.</text>
+                    }
+                    else
+                    {
+                        <text>No youth constituents found from @_councilBarangay</text>
+                    }
+                </MudText>
+            </MudCard>
+        }
+    </div>
+}
+
+@code {
+    private bool _isLoading = true;
+    private bool _isAuthorized = false;
+    private bool _showFilters = false;
+    private bool _initialized = false;
+
+    private string _councilBarangay = string.Empty;
+
+    private List<YouthModel> _allYouths = new();
+    private List<YouthModel> _filteredYouths = new();
+
+    private string _searchTerm = string.Empty;
+    private string _genderFilter = "All";
+    private string _skVoterFilter = "All";
+    private string _statusFilter = "All";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await UserState.InitializeAsync();
+            await InitializeCouncilData();
+        }
+    }
+
+    private async Task InitializeCouncilData()
+    {
+        // Check if user is authenticated
+        if (!UserState.IsAuthenticated || string.IsNullOrEmpty(UserState.Username))
+        {
+            _isAuthorized = false;
+            _isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // Get the current user (council member) from Users table
+            var councilUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+            if (councilUser == null || councilUser.Role != "Council")
+            {
+                _isAuthorized = false;
+                Snackbar.Add("Access denied. Council members only.", Severity.Error);
+                _isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Get barangay from the User's Barangay field
+            _councilBarangay = councilUser.Area ?? string.Empty;
+
+            if (string.IsNullOrEmpty(_councilBarangay))
+            {
+                _isAuthorized = false;
+                Snackbar.Add("No barangay assigned to your account.", Severity.Warning);
+                _isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            _isAuthorized = true;
+
+            // Load youth from the same barangay only
+            _allYouths = await db.Youths
+                .Where(y => y.Barangay == _councilBarangay)
+                .OrderByDescending(y => y.DateRegistered)
+                .AsNoTracking()
+                .ToListAsync();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+            _isAuthorized = false;
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredYouths = _allYouths;
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredYouths = _filteredYouths.Where(y =>
+                (y.FirstName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (y.MiddleName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (y.LastName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (y.Email?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (y.ContactNumber?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        if (_genderFilter != "All")
+        {
+            _filteredYouths = _filteredYouths.Where(y => y.Gender == _genderFilter).ToList();
+        }
+
+        if (_skVoterFilter != "All")
+        {
+            bool isSKVoter = _skVoterFilter == "Yes";
+            _filteredYouths = _filteredYouths.Where(y => y.IsSKVoter == isSKVoter).ToList();
+        }
+
+        if (_statusFilter != "All")
+        {
+            _filteredYouths = _filteredYouths.Where(y => y.Status == _statusFilter).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _genderFilter = "All";
+        _skVoterFilter = "All";
+        _statusFilter = "All";
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _genderFilter != "All" ||
+               _skVoterFilter != "All" ||
+               _statusFilter != "All";
+    }
+
+    private string GetYouthImagePath(YouthModel youth)
+    {
+        if (youth.ImageData != null && !string.IsNullOrEmpty(youth.ImageMimeType))
+        {
+            return $"data:{youth.ImageMimeType};base64,{Convert.ToBase64String(youth.ImageData)}";
+        }
+        return "/Uploads/UserImg.png";
+    }
+
+    private async Task ViewYouth(YouthModel youth)
+    {
+        var parameters = new DialogParameters { { "YouthToView", youth } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<ViewYouthDialog>("Youth Details", parameters, options);
+    }
+}

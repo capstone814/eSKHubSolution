@@ -1,0 +1,426 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Text.RegularExpressions
+@inject ISnackbar Snackbar
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject eSKHub.Services.IEmailService EmailService
+@implements IDisposable
+
+<style>
+    .otp-input input {
+        text-align: center !important;
+        font-size: 24px !important;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+</style>
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px; background-color: var(--mud-palette-drawer-background) !important;">
+    <TitleContent>
+        YOUTH LOGIN
+    </TitleContent>
+
+    <DialogContent>
+        @if (_step == DialogStep.EnterEmail)
+        {
+            <MudForm @ref="_emailForm">
+                <MudText Typo="Typo.body2" Class="mb-4">
+                    Enter your registered email address to receive a 4-digit verification code.
+                </MudText>
+
+                <MudTextField T="string"
+                              Label="Email Address"
+                              @bind-Value="_email"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Validation="@(new Func<string, string?>(ValidateEmail))"
+                              Variant="Variant.Outlined" />
+            </MudForm>
+        }
+        else if (_step == DialogStep.EnterOtp)
+        {
+            <MudForm @ref="_otpForm">
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    A 4-digit code has been sent to <strong>@_maskedEmail</strong>
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mb-4" Color="Color.Primary">
+                    Please enter the code below:
+                </MudText>
+
+                <div class="d-flex justify-center gap-6 mb-4">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        int index = i;
+                        <MudTextField T="string"
+                                      @bind-Value="_otpDigits[index]"
+                                      MaxLength="1"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="otp-input"
+                                      InputStyle="width: 60px; font-size: 24px; text-align: center;"
+                                      OnKeyUp="@((KeyboardEventArgs e) => HandleKeyUp(e, index))"
+                                      @ref="_otpInputs[index]" />
+                    }
+                </div>
+
+                @if (_remainingSeconds > 0)
+                {
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-2" Color="@(_remainingSeconds <= 60 ? Color.Warning : Color.Info)">
+                        Code expires in: <strong>@FormatTime(_remainingSeconds)</strong>
+                    </MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-2">
+                        Verification code has expired. Please request a new one.
+                    </MudAlert>
+                }
+
+                <MudText Typo="Typo.caption" Align="Align.Center" Color="Color.Secondary">
+                    Didn't receive the code?
+                    <MudLink OnClick="ResendOtp" Color="Color.Primary" Disabled="@_isResending">
+                        @if (_isResending)
+                        {
+                            <span>Resending...</span>
+                        }
+                        else
+                        {
+                            <span>Resend</span>
+                        }
+                    </MudLink>
+                </MudText>
+            </MudForm>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_errorMessage</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@(_isSending || _isVerifying)">Cancel</MudButton>
+
+        @if (_step == DialogStep.EnterEmail)
+        {
+            <MudButton Color="Color.Primary" OnClick="SendOtp" Disabled="@_isSending">
+                @if (_isSending)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Sending...</span>
+                }
+                else
+                {
+                    <span>Send Code</span>
+                }
+            </MudButton>
+        }
+        else if (_step == DialogStep.EnterOtp)
+        {
+            <MudButton Color="Color.Primary" OnClick="VerifyOtp" Disabled="@(_isVerifying || _remainingSeconds <= 0)">
+                @if (_isVerifying)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Verifying...</span>
+                }
+                else
+                {
+                    <span>Verify & Login</span>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private enum DialogStep
+    {
+        EnterEmail,
+        EnterOtp
+    }
+
+    private MudForm _emailForm = default!;
+    private MudForm _otpForm = default!;
+    private bool _isSending = false;
+    private bool _isResending = false;
+    private bool _isVerifying = false;
+    private DialogStep _step = DialogStep.EnterEmail;
+
+    private string _email = string.Empty;
+    private string _maskedEmail = string.Empty;
+    private string _generatedOtp = string.Empty;
+    private DateTime _otpGeneratedAt;
+    private int _remainingSeconds = 0;
+    private System.Threading.Timer? _countdownTimer;
+    private Youth? _youth;
+
+    private string[] _otpDigits = new string[4];
+    private MudTextField<string>[] _otpInputs = new MudTextField<string>[4];
+
+    private string _errorMessage = string.Empty;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address (e.g., example@mail.com)";
+
+        return null;
+    }
+
+    private string MaskEmail(string email)
+    {
+        var parts = email.Split('@');
+        if (parts.Length != 2) return email;
+
+        var username = parts[0];
+        var domain = parts[1];
+
+        if (username.Length <= 2)
+            return $"{username[0]}***@{domain}";
+
+        return $"{username.Substring(0, 2)}***@{domain}";
+    }
+
+    private string FormatTime(int totalSeconds)
+    {
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes:D2}:{seconds:D2}";
+    }
+
+    private void StartCountdown()
+    {
+        _remainingSeconds = 300; // 5 minutes = 300 seconds
+
+        _countdownTimer?.Dispose();
+        _countdownTimer = new System.Threading.Timer(_ =>
+        {
+            _remainingSeconds--;
+
+            if (_remainingSeconds <= 0)
+            {
+                _countdownTimer?.Dispose();
+                _countdownTimer = null;
+            }
+
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task SendOtp()
+    {
+        await _emailForm.Validate();
+
+        if (!_emailForm.IsValid)
+            return;
+
+        _isSending = true;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var normalizedEmail = _email.Trim().ToLower();
+
+            // Find youth by email
+            _youth = await db.Youths.FirstOrDefaultAsync(y =>
+                y.Email.ToLower().Trim() == normalizedEmail
+            );
+
+            if (_youth == null)
+            {
+                _errorMessage = "No youth account found with this email address.";
+                _isSending = false;
+                return;
+            }
+
+            if (_youth.Status != "Active")
+            {
+                _errorMessage = "Your account is inactive. Please contact the administrator.";
+                _isSending = false;
+                return;
+            }
+
+            // Generate 4-digit OTP
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.UtcNow;
+
+            // Send email with OTP code
+            await EmailService.SendYouthOtpEmailAsync(_email, _generatedOtp, _youth.FirstName);
+
+            _maskedEmail = MaskEmail(_email);
+            _step = DialogStep.EnterOtp;
+
+            // Start the countdown timer
+            StartCountdown();
+
+            Snackbar.Add($"Verification code sent to {_maskedEmail}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error sending code: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResendOtp()
+    {
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Session expired. Please start over.";
+            _step = DialogStep.EnterEmail;
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        _otpDigits = new string[4];
+        _isResending = true;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var normalizedEmail = _email.Trim().ToLower();
+
+            // Verify youth still exists
+            _youth = await db.Youths.FirstOrDefaultAsync(y =>
+                y.Email.ToLower().Trim() == normalizedEmail
+            );
+
+            if (_youth == null || _youth.Status != "Active")
+            {
+                _errorMessage = "Account verification failed. Please start over.";
+                _step = DialogStep.EnterEmail;
+                _isResending = false;
+                return;
+            }
+
+            // Generate new OTP
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.UtcNow;
+
+            // Send email with new OTP code
+            await EmailService.SendYouthOtpEmailAsync(_email, _generatedOtp, _youth.FirstName);
+
+            // Restart the countdown timer
+            StartCountdown();
+
+            Snackbar.Add("Verification code resent!", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error resending code: {ex.Message}";
+        }
+        finally
+        {
+            _isResending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task VerifyOtp()
+    {
+        _errorMessage = string.Empty;
+
+        var enteredOtp = string.Join("", _otpDigits);
+
+        if (enteredOtp.Length != 4)
+        {
+            _errorMessage = "Please enter all 4 digits.";
+            return;
+        }
+
+        // Check if OTP has expired
+        var elapsedTime = DateTime.UtcNow - _otpGeneratedAt;
+        if (elapsedTime.TotalMinutes > 5)
+        {
+            _errorMessage = "Verification code has expired. Please request a new one.";
+            _otpDigits = new string[4];
+            return;
+        }
+
+        _isVerifying = true;
+        StateHasChanged();
+
+        try
+        {
+            if (enteredOtp == _generatedOtp)
+            {
+                // Stop the countdown timer
+                _countdownTimer?.Dispose();
+                _countdownTimer = null;
+
+                // OTP verified - proceed with login
+                if (_youth != null)
+                {
+                    await UserState.Login($"youth_{_youth.Id}");
+                    await UserState.SetFullname(_youth.FullName);
+                    await UserState.SetArea(_youth.Barangay);
+
+                    Snackbar.Add($"Welcome, {_youth.FirstName}!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+
+                    NavigationManager.NavigateTo("/youth/home", forceLoad: true);
+                }
+            }
+            else
+            {
+                _errorMessage = "Invalid verification code. Please try again.";
+                _otpDigits = new string[4];
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error verifying code: {ex.Message}";
+        }
+        finally
+        {
+            _isVerifying = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e, int index)
+    {
+        // Move to next input if digit entered
+        if (!string.IsNullOrEmpty(_otpDigits[index]) && index < 3)
+        {
+            await _otpInputs[index + 1].FocusAsync();
+        }
+        // Move to previous input on backspace
+        else if (e.Key == "Backspace" && index > 0 && string.IsNullOrEmpty(_otpDigits[index]))
+        {
+            await _otpInputs[index - 1].FocusAsync();
+        }
+    }
+
+    private void Cancel()
+    {
+        _countdownTimer?.Dispose();
+        MudDialog.Cancel();
+    }
+
+    public void Dispose()
+    {
+        _countdownTimer?.Dispose();
+    }
+}

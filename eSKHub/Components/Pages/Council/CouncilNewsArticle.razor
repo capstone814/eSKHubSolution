@@ -1,0 +1,614 @@
+﻿@page "/council/news"
+@layout eSKHub.Components.Layout.CouncilLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using eSKHub.Components.Dialogs
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<PageTitle>Manage News Articles - Council</PageTitle>
+
+<style>
+    .news-card {
+        margin-bottom: 16px;
+        border-left: 4px solid #7e6fff;
+        transition: transform 0.2s ease;
+    }
+
+        .news-card:hover {
+            transform: translateX(4px);
+        }
+
+    .news-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, rgba(126, 111, 255, 0.1) 0%, rgba(126, 111, 255, 0.05) 100%);
+    }
+
+    .news-body {
+        padding: 16px;
+    }
+
+    .news-summary {
+        padding: 0 16px 8px;
+        font-style: italic;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .news-meta {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .add-news-btn {
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 0px;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .desktop-cards {
+        display: block;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    @@media (max-width: 600px) {
+        .news-meta {
+            font-size: 0.85rem;
+        }
+
+        .add-news-btn {
+            width: 100%;
+            margin-bottom: 12px;
+            margin-top: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+
+        .desktop-cards {
+            display: none;
+        }
+
+        .mobile-cards {
+            display: block;
+        }
+
+        .news-mobile-card {
+            margin-bottom: 12px;
+            border-left: 4px solid #7e6fff;
+        }
+
+        .news-mobile-header {
+            background-color: #7e6fff;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-right-radius: 4px;
+        }
+
+        .news-mobile-content {
+            padding: 16px;
+        }
+
+        .news-mobile-actions {
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+            padding: 10px 16px;
+        }
+
+            .news-mobile-actions .mud-icon-button {
+                flex: 1;
+                min-width: 0;
+            }
+
+        .news-field-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .news-field-value {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+    }
+</style>
+
+<div class="button-group">
+    <MudButton Class="add-news-btn"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add"
+               Color="Color.Info"
+               Size="Size.Small"
+               OnClick="OpenAddNewsDialog">
+        NEWS ARTICLE
+    </MudButton>
+</div>
+
+<!-- Filter Section -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField T="string"
+                          @bind-Value="_searchTerm"
+                          @bind-Value:after="ApplyFilters"
+                          Label="Search News"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="Title, summary..."
+                          Immediate="true"
+                          DebounceInterval="300"
+                          Dense="true"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="string"
+                       @bind-Value="_statusFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                <MudSelectItem Value="@("Published")">Published</MudSelectItem>
+                <MudSelectItem Value="@("Draft")">Draft</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="12" md="4">
+            <MudSelect T="string"
+                       @bind-Value="_newsTypeFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="News Type"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Types</MudSelectItem>
+                <MudSelectItem Value="@("Breaking")">Breaking</MudSelectItem>
+                <MudSelectItem Value="@("Feature")">Feature</MudSelectItem>
+                <MudSelectItem Value="@("Community")">Community</MudSelectItem>
+                <MudSelectItem Value="@("Event")">Event</MudSelectItem>
+                <MudSelectItem Value="@("Achievement")">Achievement</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+    <MudGrid>
+        <MudItem xs="12">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Showing @_pagedNews.Count of @_filteredNews.Count articles
+                </MudText>
+                @if (HasActiveFilters())
+                {
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="ClearFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Elevation="0" Class="pa-4">
+    @if (_pagedNews == null || !_pagedNews.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            @if (HasActiveFilters())
+            {
+                <text>No news articles found matching your filters.</text>
+            }
+            else
+            {
+                <text>No news articles yet. Create your first article!</text>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Desktop View -->
+        <div class="desktop-cards">
+            @foreach (var news in _pagedNews)
+            {
+                <MudCard Class="news-card" Elevation="2">
+                    <div class="news-header">
+                        <div>
+                            <MudText Typo="Typo.h6" Style="font-weight: 600;">@news.Title</MudText>
+                            <div class="news-meta">
+                                <MudChip T="string" Size="Size.Small" Color="@(news.IsPublished? Color.Success: Color.Default)">
+                                    @(news.IsPublished ? "Published" : "Draft")
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@GetNewsTypeColor(news.NewsType)">
+                                    @news.NewsType
+                                </MudChip>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="display: flex; align-items: center; gap: 6px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                    @news.Author (@news.AuthorPosition - @news.AuthorArea)
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                         Style="display: flex; align-items: center; gap: 6px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                                    @news.DateCreated.ToString("MMM dd, yyyy • hh:mm tt")
+                                </MudText>
+                                @if (news.DateModified.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                             Style="display: flex; align-items: center; gap: 6px;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                                        Updated: @news.DateModified.Value.ToString("MMM dd, yyyy • hh:mm tt")
+                                    </MudText>
+                                }
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => EditNews(news))"
+                                           Title="Edit" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@(() => DeleteNews(news))"
+                                           Title="Delete" />
+                        </div>
+                    </div>
+                    <div class="news-summary">
+                        <MudText Typo="Typo.body2">@news.Summary</MudText>
+                    </div>
+                    <div class="news-body">
+                        <MudText Typo="Typo.body2" Style="display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">
+                            @news.Content
+                        </MudText>
+                    </div>
+                    @if (news.AttachmentData != null && news.AttachmentData.Length > 0)
+                    {
+                        <MudCardActions>
+                            <MudChip T="string" Icon="@Icons.Material.Filled.AttachFile" Size="Size.Small" Color="Color.Secondary">
+                                @(news.AttachmentType == "image" ? "Image attached" : "Document attached")
+                            </MudChip>
+                        </MudCardActions>
+                    }
+                </MudCard>
+            }
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="mobile-cards">
+            @for (int i = 0; i < _pagedNews.Count; i++)
+            {
+                var news = _pagedNews[i];
+                var index = (_currentPage - 1) * _pageSize + i + 1;
+
+                <MudCard Class="news-mobile-card" Elevation="2">
+                    <div class="news-mobile-header">
+                        <span><strong>News #@index</strong></span>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(news.IsPublished ? Color.Success : Color.Default)"
+                                 Style="background: rgba(255,255,255,0.3); color: white;">
+                            @(news.IsPublished ? "Published" : "Draft")
+                        </MudChip>
+                    </div>
+                    <div class="news-mobile-content">
+                        <MudText Typo="Typo.body2" Class="news-field-label">
+                            <strong>Title:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="news-field-value">
+                            @news.Title
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="news-field-label">
+                            <strong>Type:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="news-field-value">
+                            <MudChip T="string" Size="Size.Small" Color="@GetNewsTypeColor(news.NewsType)">
+                                @news.NewsType
+                            </MudChip>
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="news-field-label">
+                            <strong>Author:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="news-field-value">
+                            @news.Author (@news.AuthorPosition - @news.AuthorArea)
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="news-field-label">
+                            <strong>Date Created:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="news-field-value">
+                            @news.DateCreated.ToString("MMM dd, yyyy • hh:mm tt")
+                        </MudText>
+                    </div>
+                    <div class="news-mobile-actions">
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => EditNews(news))" />
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteNews(news))" />
+                    </div>
+                </MudCard>
+            }
+        </div>
+
+        <!-- Pagination -->
+        <div style="display: flex; justify-content: center; margin-top: 24px;">
+            <MudPagination Count="@_totalPages"
+                           Selected="@_currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           ShowFirstButton="true"
+                           ShowLastButton="true" />
+        </div>
+}
+</MudPaper>
+
+@code {
+private bool _showFilters = false;
+private List<NewsArticle> _allNews = new();
+private List<NewsArticle> _filteredNews = new();
+private List<NewsArticle> _pagedNews = new();
+private bool _initialized = false;
+private string _currentUserArea = string.Empty;
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "All";
+    private string _newsTypeFilter = "All";
+
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int _totalPages = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+
+            await UserState.InitializeAsync();
+
+            if (!UserState.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+            if (currentUser == null || currentUser.Role == "Admin")
+            {
+                NavigationManager.NavigateTo("/", forceLoad: true);
+                return;
+            }
+
+            _currentUserArea = currentUser.Area;
+
+            await LoadNews();
+        }
+    }
+
+    private async Task LoadNews()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _allNews = await db.NewsArticles
+            .Where(n => n.AuthorArea == _currentUserArea)
+            .OrderByDescending(n => n.DateCreated)
+            .AsNoTracking()
+            .ToListAsync();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredNews = _allNews;
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredNews = _filteredNews.Where(n =>
+                (n.Title?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (n.Summary?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (n.Content?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        if (_statusFilter != "All")
+        {
+            bool isPublished = _statusFilter == "Published";
+            _filteredNews = _filteredNews.Where(n => n.IsPublished == isPublished).ToList();
+        }
+
+        if (_newsTypeFilter != "All")
+        {
+            _filteredNews = _filteredNews.Where(n => n.NewsType == _newsTypeFilter).ToList();
+        }
+
+        _currentPage = 1;
+        UpdatePagination();
+    }
+
+    private void UpdatePagination()
+    {
+        _totalPages = (int)Math.Ceiling(_filteredNews.Count / (double)_pageSize);
+        if (_totalPages == 0) _totalPages = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _pagedNews = _filteredNews.Skip(skip).Take(_pageSize).ToList();
+        StateHasChanged();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+        UpdatePagination();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _statusFilter = "All";
+        _newsTypeFilter = "All";
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _statusFilter != "All" ||
+               _newsTypeFilter != "All";
+    }
+
+    private Color GetNewsTypeColor(string newsType) => newsType switch
+    {
+        "Breaking" => Color.Error,
+        "Feature" => Color.Primary,
+        "Community" => Color.Success,
+        "Event" => Color.Info,
+        "Achievement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private async Task OpenAddNewsDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CouncilAddNewsArticleForm>("Create News Article", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadNews();
+            Snackbar.Add("News article created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task EditNews(NewsArticle news)
+    {
+        var parameters = new DialogParameters
+    {
+        { "NewsToEdit", news }
+    };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<CouncilEditNewsArticleForm>("Edit News Article", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadNews();
+            Snackbar.Add("News article updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task DeleteNews(NewsArticle news)
+    {
+        var parameters = new DialogParameters
+    {
+        { "ContentText", $"Are you sure you want to delete '{news.Title}'? This action cannot be undone." },
+        { "ButtonText", "Delete" },
+        { "Color", Color.Error }
+    };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters, options);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var newsToDelete = await db.NewsArticles.FindAsync(news.Id);
+
+            if (newsToDelete != null)
+            {
+                db.NewsArticles.Remove(newsToDelete);
+                await db.SaveChangesAsync();
+            }
+
+            await LoadNews();
+            Snackbar.Add("News article deleted successfully!", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,309 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Formats.Png
+@using MudColor = MudBlazor.Color
+@using MudSize = MudBlazor.Size
+@using ImageSharpSize = SixLabors.ImageSharp.Size
+@using ImageSharpResizeOptions = SixLabors.ImageSharp.Processing.ResizeOptions
+@using ImageSharpResizeMode = SixLabors.ImageSharp.Processing.ResizeMode
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+@inject UserStateService UserState
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        CREATE ANNOUNCEMENT
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_newAnnouncement">
+            <MudTextField T="string"
+                          Label="Subject"
+                          @bind-Value="_newAnnouncement.Subject"
+                          Required="true"
+                          RequiredError="Subject is required"
+                          Variant="Variant.Outlined"
+                          Class="mb-3" />
+
+            <MudTextField T="string"
+                          Label="Short Description"
+                          @bind-Value="_newAnnouncement.ShortDescription"
+                          Required="true"
+                          RequiredError="Short description is required"
+                          Counter="160"
+                          MaxLength="160"
+                          Immediate="true"
+                          Lines="2"
+                          Variant="Variant.Outlined"
+                          HelperText="Brief summary (max 160 characters)"
+                          Class="mb-3" />
+
+            <MudTextField T="string"
+                          Label="Body"
+                          @bind-Value="_newAnnouncement.Body"
+                          Required="true"
+                          RequiredError="Body is required"
+                          Lines="10"
+                          Variant="Variant.Outlined"
+                          Class="mb-3" />
+
+            <MudSelect T="string"
+                       Label="Audience"
+                       Value="@_newAnnouncement.Audience"
+                       ValueChanged="OnAudienceChanged"
+                       Required="true"
+                       RequiredError="Audience is required"
+                       Variant="Variant.Outlined"
+                       Class="mb-3">
+                <MudSelectItem Value="@("Barangay")">My Barangay Only</MudSelectItem>
+            </MudSelect>
+
+            <MudAlert Severity="Severity.Info" Class="mb-3">
+                Note: Council members can only create announcements for their own barangay. Admin approval is required to publish to Public.
+            </MudAlert>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Attach File (Optional)</MudText>
+
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                @if (!string.IsNullOrEmpty(_attachmentPreviewUrl))
+                {
+                    <div style="position: relative; display: inline-block;">
+                        @if (_attachmentType == "image")
+                        {
+                            <img src="@_attachmentPreviewUrl"
+                                 alt="Preview"
+                                 style="max-height: 200px; max-width: 100%; border-radius: 6px;" />
+                        }
+                        else
+                        {
+                            <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile"
+                                     Color="MudColor.Info"
+                                     Size="MudSize.Large">
+                                @_attachmentFileName
+                            </MudChip>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                       Color="MudColor.Error"
+                                       Size="MudSize.Small"
+                                       OnClick="ClearAttachment"
+                                       Style="position: absolute; top: -8px; right: -8px;" />
+                    </div>
+                }
+                else
+                {
+                    <label for="upload-attachment-council" style="cursor: pointer; display: inline-block;">
+                        <MudPaper Class="pa-4 d-flex align-center justify-center"
+                                  Style="border: 2px dashed #7e6fff; background: transparent;"
+                                  Elevation="0">
+                            <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
+                                     Color="MudColor.Primary"
+                                     Size="MudSize.Large" />
+                            <MudText Typo="Typo.body2" Class="ml-2">
+                                Click to upload image or document
+                            </MudText>
+                        </MudPaper>
+                    </label>
+                }
+
+                <InputFile id="upload-attachment-council"
+                           OnChange="OnFileChanged"
+                           accept="image/*,.pdf,.doc,.docx,.txt"
+                           style="display: none;" />
+            </div>
+
+            <MudText Typo="Typo.caption" Color="MudColor.Secondary">
+                Accepted: Images (JPG, PNG), Documents (PDF, DOC, DOCX, TXT) - Max 10MB
+            </MudText>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="MudColor.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="MudSize.Small" Indeterminate="true" Class="mr-2" />
+                <span>Creating...</span>
+            }
+            else
+            {
+                <span>Create</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    private Announcement _newAnnouncement = new() { Audience = "Select" };
+
+    private string? _attachmentPreviewUrl;
+    private byte[]? _attachmentBytes;
+    private string? _attachmentFileName;
+    private string? _attachmentType;
+    private string? _attachmentMimeType;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        _newAnnouncement.TargetBarangay = UserState.Area;
+    }
+
+    private void OnAudienceChanged(string newAudience)
+    {
+        _newAnnouncement.Audience = newAudience;
+        StateHasChanged();
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        _isSaving = true;
+
+        try
+        {
+            _newAnnouncement.Author = UserState.Fullname ?? "Unknown";
+            _newAnnouncement.AuthorPosition = UserState.Position ?? "";
+            _newAnnouncement.AuthorArea = UserState.Area ?? "";
+            _newAnnouncement.DateCreated = DateTime.Now;
+            _newAnnouncement.IsPublished = false; // Council cannot publish directly
+
+            if (_attachmentBytes != null && !string.IsNullOrEmpty(_attachmentMimeType))
+            {
+                _newAnnouncement.AttachmentData = _attachmentBytes;
+                _newAnnouncement.AttachmentMimeType = _attachmentMimeType;
+                _newAnnouncement.AttachmentType = _attachmentType;
+                _newAnnouncement.Attachment = _attachmentFileName;
+            }
+
+            Db.Announcements.Add(_newAnnouncement);
+            await Db.SaveChangesAsync();
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating announcement: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            Snackbar.Add("File size must be less than 10MB", Severity.Warning);
+            return;
+        }
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+        var documentExtensions = new[] { ".pdf", ".doc", ".docx", ".txt" };
+
+        if (imageExtensions.Contains(extension))
+        {
+            _attachmentType = "image";
+            await ProcessImageFile(file);
+        }
+        else if (documentExtensions.Contains(extension))
+        {
+            _attachmentType = "document";
+            await ProcessDocumentFile(file);
+        }
+        else
+        {
+            Snackbar.Add("Unsupported file type", Severity.Warning);
+            return;
+        }
+
+        _attachmentFileName = $"{Guid.NewGuid()}{extension}";
+    }
+
+    private async Task ProcessImageFile(IBrowserFile file)
+    {
+        using var inputStream = file.OpenReadStream(10 * 1024 * 1024);
+        using var image = await Image.LoadAsync(inputStream);
+
+        // Reduce max dimensions to 800x800 instead of 1200x1200
+        image.Mutate(x => x.Resize(new ImageSharpResizeOptions
+        {
+            Size = new ImageSharpSize(800, 800),  // Changed from 1200, 1200
+            Mode = ImageSharpResizeMode.Max
+        }));
+
+        using var ms = new MemoryStream();
+
+        if (Path.GetExtension(file.Name).ToLowerInvariant() == ".png")
+        {
+            // Use maximum compression for PNG
+            var encoder = new PngEncoder { CompressionLevel = PngCompressionLevel.BestCompression };
+            await image.SaveAsync(ms, encoder);
+            _attachmentMimeType = "image/png";
+            _attachmentPreviewUrl = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+        }
+        else
+        {
+            // Reduce JPEG quality to 70 instead of 85
+            var encoder = new JpegEncoder { Quality = 70 };  // Changed from 85
+            await image.SaveAsync(ms, encoder);
+            _attachmentMimeType = "image/jpeg";
+            _attachmentPreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(ms.ToArray())}";
+        }
+
+        _attachmentBytes = ms.ToArray();
+
+        // Check if still too large, compress more if needed
+        if (_attachmentBytes.Length > 500 * 1024) // 500KB
+        {
+            using var image2 = await Image.LoadAsync(new MemoryStream(_attachmentBytes));
+            using var ms2 = new MemoryStream();
+
+            // Further reduce quality
+            var encoder = new JpegEncoder { Quality = 60 };
+            await image2.SaveAsync(ms2, encoder);
+            _attachmentBytes = ms2.ToArray();
+            _attachmentMimeType = "image/jpeg";
+            _attachmentPreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(_attachmentBytes)}";
+        }
+
+        Snackbar.Add($"Image uploaded ({_attachmentBytes.Length / 1024}KB)", Severity.Success);
+    }
+
+    private async Task ProcessDocumentFile(IBrowserFile file)
+    {
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+        _attachmentBytes = ms.ToArray();
+        _attachmentPreviewUrl = "document";
+
+        _attachmentMimeType = file.ContentType ?? "application/octet-stream";
+        Snackbar.Add($"Document uploaded ({_attachmentBytes.Length / 1024}KB)", Severity.Success);
+    }
+
+    private void ClearAttachment()
+    {
+        _attachmentPreviewUrl = null;
+        _attachmentBytes = null;
+        _attachmentFileName = null;
+        _attachmentType = null;
+        _attachmentMimeType = null;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

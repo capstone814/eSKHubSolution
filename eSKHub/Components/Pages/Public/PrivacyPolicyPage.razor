@@ -1,0 +1,385 @@
+﻿@page "/privacy-policy"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using eSKHub.Components.Services
+@using eSKHub.Components.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject ThemeService ThemeService
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@implements IDisposable
+
+<PageTitle>Privacy Policy - eSKHub Bacacay</PageTitle>
+
+<style>
+    .privacy-page {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .privacy-hero {
+        position: relative;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        color: white;
+        border-radius: 24px;
+        padding: 80px 48px;
+        margin-top: 24px;
+        margin-bottom: 48px;
+        overflow: hidden;
+    }
+
+        .privacy-hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+    .privacy-hero-content {
+        position: relative;
+        z-index: 10;
+        text-align: center;
+    }
+
+    .privacy-hero h1 {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .privacy-hero p {
+        font-size: 1.25rem;
+        opacity: 0.95;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .privacy-content {
+        background: var(--mud-palette-surface);
+        border-radius: 16px;
+        padding: 48px;
+        border: 1px solid var(--mud-palette-divider);
+        margin-bottom: 32px;
+    }
+
+    .privacy-section {
+        margin-bottom: 48px;
+    }
+
+        .privacy-section:last-child {
+            margin-bottom: 0;
+        }
+
+    .section-title {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        color: #667eea;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+        .section-title .mud-icon-root {
+            font-size: 1.75rem;
+        }
+
+    .section-subtitle {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 24px 0 12px 0;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .privacy-text {
+        font-size: 1rem;
+        line-height: 1.8;
+        color: var(--mud-palette-text-primary);
+        margin-bottom: 16px;
+        white-space: pre-line;
+    }
+
+    .privacy-list {
+        margin: 16px 0;
+        padding-left: 24px;
+    }
+
+        .privacy-list li {
+            margin-bottom: 8px;
+            line-height: 1.8;
+        }
+
+    .highlight-box {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 24px 0;
+    }
+
+    .last-updated {
+        text-align: center;
+        padding: 24px;
+        background: var(--mud-palette-surface);
+        border-radius: 12px;
+        border: 1px solid var(--mud-palette-divider);
+        margin-bottom: 32px;
+    }
+
+    @@media (max-width: 600px) {
+        .privacy-hero {
+            padding: 40px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+            .privacy-hero h1 {
+                font-size: 1.75rem;
+            }
+
+            .privacy-hero p {
+                font-size: 0.95rem;
+            }
+
+        .privacy-content {
+            padding: 24px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .section-subtitle {
+            font-size: 1.1rem;
+        }
+
+        .privacy-text {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+
+<div class="privacy-page">
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <!-- Hero Section -->
+        <div class="privacy-hero">
+            <div class="privacy-hero-content">
+                <h1>Privacy Policy</h1>
+                <p>Your privacy is important to us. Learn how we collect, use, and protect your information.</p>
+            </div>
+        </div>
+
+        <!-- Last Updated -->
+        <div class="last-updated">
+            <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                Last Updated: @(_lastUpdatedDate?.ToString("MMMM d, yyyy") ?? "January 9, 2026")
+            </MudText>
+        </div>
+
+        <!-- Privacy Content -->
+        <div class="privacy-content">
+            <!-- Introduction -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Description" />
+                    Introduction
+                </h2>
+                <p class="privacy-text">@_introductionText</p>
+            </div>
+
+            <!-- Information We Collect -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Collections" />
+                    Information We Collect
+                </h2>
+
+                <h3 class="section-subtitle">Personal Information</h3>
+                <p class="privacy-text">@_personalInfoCollected</p>
+
+                <h3 class="section-subtitle">Automatically Collected Information</h3>
+                <p class="privacy-text">@_autoCollectedInfo</p>
+            </div>
+
+            <!-- How We Use Your Information -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Security" />
+                    How We Use Your Information
+                </h2>
+                <p class="privacy-text">@_howWeUseInfo</p>
+            </div>
+
+            <!-- Information Sharing -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Share" />
+                    Information Sharing and Disclosure
+                </h2>
+                <p class="privacy-text">@_infoSharing</p>
+            </div>
+
+            <!-- Data Security -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" />
+                    Data Security
+                </h2>
+                <p class="privacy-text">@_dataSecurity</p>
+            </div>
+
+            <!-- Your Rights -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" />
+                    Your Rights and Choices
+                </h2>
+                <p class="privacy-text">@_userRights</p>
+            </div>
+
+            <!-- Children's Privacy -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.ChildCare" />
+                    Children's Privacy
+                </h2>
+                <p class="privacy-text">@_childrenPrivacy</p>
+            </div>
+
+            <!-- Cookies and Tracking -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Cookie" />
+                    Cookies and Tracking Technologies
+                </h2>
+                <p class="privacy-text">@_cookiesTracking</p>
+            </div>
+
+            <!-- Changes to Policy -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Update" />
+                    Changes to This Privacy Policy
+                </h2>
+                <p class="privacy-text">@_policyChanges</p>
+            </div>
+
+            <!-- Contact Information -->
+            <div class="privacy-section">
+                <h2 class="section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.ContactMail" />
+                    Contact Us
+                </h2>
+                <p class="privacy-text">
+                    If you have questions or concerns about this Privacy Policy, please contact us:
+                </p>
+                <div class="highlight-box">
+                    <MudText Typo="Typo.body1" Style="line-height: 1.8;">
+                        <strong>Data Protection Officer</strong><br />
+                        @_orgName<br />
+                        @((MarkupString)_orgAddress.Replace("\n", "<br />"))<br />
+                        Email: @_dpoEmail<br />
+                        Phone: @_dpoPhone
+                    </MudText>
+                </div>
+            </div>
+        </div>
+
+    </MudContainer>
+</div>
+
+@code {
+    // Contact Information
+    private string _dpoEmail = "dpo@eskhub-bacacay.gov.ph";
+    private string _dpoPhone = "(052) 123-4567";
+    private string _orgName = "SK Federation Bacacay";
+    private string _orgAddress = "Municipal Hall of Bacacay, Bacacay, Albay 4510";
+    private string _contactEmail = "info@eskhub-bacacay.gov.ph";
+    private string _contactPhone = "(052) 123-4567";
+    private DateTime? _lastUpdatedDate = DateTime.Today;
+
+    // Content Sections
+    private string _introductionText = "Welcome to eSKHub Bacacay (\"we,\" \"our,\" or \"us\"). We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.\n\nBy accessing or using eSKHub Bacacay, you agree to the terms of this Privacy Policy. If you do not agree with our policies and practices, please do not use our services.";
+
+    private string _personalInfoCollected = "We may collect personal information that you voluntarily provide to us when you:\n• Register for youth programs or events\n• Submit feedback or contact us\n• Subscribe to our newsletter\n• Participate in surveys or polls\n• Apply for youth membership\n\nThis information may include:\n• Name and contact information (email, phone number, address)\n• Date of birth and age\n• Gender and civil status\n• Educational background\n• Skills and interests\n• Profile pictures or photos";
+
+    private string _autoCollectedInfo = "When you access our website, we may automatically collect certain information, including:\n• IP address and browser type\n• Operating system\n• Pages visited and time spent on pages\n• Referring website addresses\n• Device information";
+
+    private string _howWeUseInfo = "We use the information we collect for the following purposes:\n• Service Delivery: To provide, maintain, and improve our services\n• Communication: To send you updates, announcements, and program information\n• Program Management: To organize events, programs, and youth activities\n• Feedback Processing: To respond to your inquiries and address your concerns\n• Analytics: To understand how users interact with our platform\n• Legal Compliance: To comply with applicable laws and regulations\n• Safety & Security: To protect against fraud and ensure user safety";
+
+    private string _infoSharing = "We may share your information in the following circumstances:\n• With Your Consent: When you give us explicit permission\n• Government Agencies: As required by law or to comply with legal processes\n• Service Providers: With third-party vendors who assist in operating our platform\n• Partner Organizations: When necessary for program implementation\n• Public Information: Information you choose to make public (e.g., event participation)\n\nIMPORTANT: We do NOT sell your personal information. We will never sell, rent, or trade your personal information to third parties for marketing purposes.";
+
+    private string _dataSecurity = "We implement appropriate technical and organizational measures to protect your personal information, including:\n• Encryption of sensitive data\n• Secure server infrastructure\n• Regular security assessments\n• Access controls and authentication\n• Employee training on data protection\n\nHowever, no method of transmission over the internet is 100% secure. While we strive to protect your information, we cannot guarantee its absolute security.";
+
+    private string _userRights = "Under the Data Privacy Act of 2012 (Republic Act No. 10173), you have the following rights:\n• Right to Access: Request a copy of your personal information\n• Right to Correction: Request correction of inaccurate information\n• Right to Erasure: Request deletion of your personal information\n• Right to Object: Object to processing of your personal information\n• Right to Data Portability: Request transfer of your data to another service\n• Right to Withdraw Consent: Withdraw consent for data processing";
+
+    private string _childrenPrivacy = "Our services are designed for youth aged 15-30. For users under 18 years old:\n• We require parental or guardian consent for certain activities\n• We take extra precautions to protect minors' information\n• We do not knowingly collect information from children under 13";
+
+    private string _cookiesTracking = "We use cookies and similar technologies to:\n• Remember your preferences and settings\n• Analyze website traffic and usage patterns\n• Improve user experience\n• Maintain session information\n\nYou can control cookie preferences through your browser settings.";
+
+    private string _policyChanges = "We may update this Privacy Policy from time to time. We will notify you of any changes by:\n• Posting the new Privacy Policy on this page\n• Updating the \"Last Updated\" date\n• Sending an email notification for significant changes\n\nWe encourage you to review this Privacy Policy periodically to stay informed about how we protect your information.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeService.OnThemeChanged += StateHasChanged;
+        await LoadPageContent();
+    }
+
+    private async Task LoadPageContent()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var content = await db.PageContents
+                .FirstOrDefaultAsync(p => p.PageName == "PrivacyPolicy");
+
+            if (content != null)
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(content.Content);
+                if (data != null)
+                {
+                    // Contact Information
+                    _dpoEmail = data.GetValueOrDefault("DpoEmail", _dpoEmail);
+                    _dpoPhone = data.GetValueOrDefault("DpoPhone", _dpoPhone);
+                    _orgName = data.GetValueOrDefault("OrgName", _orgName);
+                    _orgAddress = data.GetValueOrDefault("OrgAddress", _orgAddress);
+                    _contactEmail = data.GetValueOrDefault("ContactEmail", _contactEmail);
+                    _contactPhone = data.GetValueOrDefault("ContactPhone", _contactPhone);
+
+                    if (data.ContainsKey("LastUpdatedDate") && DateTime.TryParse(data["LastUpdatedDate"], out var date))
+                    {
+                        _lastUpdatedDate = date;
+                    }
+
+                    // Content Sections
+                    _introductionText = data.GetValueOrDefault("IntroductionText", _introductionText);
+                    _personalInfoCollected = data.GetValueOrDefault("PersonalInfoCollected", _personalInfoCollected);
+                    _autoCollectedInfo = data.GetValueOrDefault("AutoCollectedInfo", _autoCollectedInfo);
+                    _howWeUseInfo = data.GetValueOrDefault("HowWeUseInfo", _howWeUseInfo);
+                    _infoSharing = data.GetValueOrDefault("InfoSharing", _infoSharing);
+                    _dataSecurity = data.GetValueOrDefault("DataSecurity", _dataSecurity);
+                    _userRights = data.GetValueOrDefault("UserRights", _userRights);
+                    _childrenPrivacy = data.GetValueOrDefault("ChildrenPrivacy", _childrenPrivacy);
+                    _cookiesTracking = data.GetValueOrDefault("CookiesTracking", _cookiesTracking);
+                    _policyChanges = data.GetValueOrDefault("PolicyChanges", _policyChanges);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading privacy policy content: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+}

@@ -1,0 +1,556 @@
+﻿@using MudBlazor
+@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Text.RegularExpressions
+@using System.Security.Cryptography
+@using System.Text
+@inject AppDbContext Db
+@inject ISnackbar Snackbar
+@inject IEmailService EmailService
+@implements IDisposable
+
+<style>
+    .otp-input input {
+        text-align: center !important;
+        font-size: 24px !important;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+</style>
+
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px; background-color: var(--mud-palette-drawer-background) !important;">
+    <TitleContent>
+        @if (_step == DialogStep.EnterCredentials)
+        {
+            <text>VERIFY OTP</text>
+        }
+        else if (_step == DialogStep.EnterOtp)
+        {
+            <text>VERIFY OTP</text>
+        }
+        else
+        {
+            <text>CHANGE PASSWORD</text>
+        }
+    </TitleContent>
+
+    <DialogContent>
+        @if (_step == DialogStep.EnterCredentials)
+        {
+            <MudForm @ref="_credentialsForm">
+                <MudText Typo="Typo.body2" Class="mb-4">
+                    Enter your username and email to receive a 4-digit verification code.
+                </MudText>
+
+                <MudTextField T="string"
+                              Label="Username"
+                              @bind-Value="_username"
+                              Required="true"
+                              RequiredError="Username is required"
+                              Class="mb-3" />
+
+                <MudTextField T="string"
+                              Label="Email"
+                              @bind-Value="_email"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Validation="@(new Func<string, string?>(ValidateEmail))" />
+            </MudForm>
+        }
+        else if (_step == DialogStep.EnterOtp)
+        {
+            <MudForm @ref="_otpForm">
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    A 4-digit code has been sent to <strong>@_maskedEmail</strong>
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mb-4" Color="Color.Primary">
+                    Please enter the code below:
+                </MudText>
+
+                <div class="d-flex justify-center gap-6 mb-4" style="">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        int index = i;
+                        <MudTextField T="string"
+                                      @bind-Value="_otpDigits[index]"
+                                      MaxLength="1"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="otp-input"
+                                      InputStyle="width: 60px; font-size: 24px; text-align: center;"
+                                      OnKeyUp="@((KeyboardEventArgs e) => HandleKeyUp(e, index))"
+                                      @ref="_otpInputs[index]" />
+                    }
+                </div>
+
+                @if (_remainingSeconds > 0)
+                {
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-2" Color="@(_remainingSeconds <= 60 ? Color.Warning : Color.Info)">
+                        Code expires in: <strong>@FormatTime(_remainingSeconds)</strong>
+                    </MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-2">
+                        Verification code has expired. Please request a new one.
+                    </MudAlert>
+                }
+
+                <MudText Typo="Typo.caption" Align="Align.Center" Color="Color.Secondary">
+                    Didn't receive the code?
+                    <MudLink OnClick="ResendOtp" Color="Color.Primary" Disabled="@_isResending">
+                        @if (_isResending)
+                        {
+                            <span>Resending...</span>
+                        }
+                        else
+                        {
+                            <span>Resend</span>
+                        }
+                    </MudLink>
+                </MudText>
+            </MudForm>
+        }
+        else if (_step == DialogStep.ChangePassword)
+        {
+            <MudForm @ref="_passwordForm">
+                <MudText Typo="Typo.body2" Class="mb-4" Color="Color.Success">
+                    Verification successful! Please enter your new password.
+                </MudText>
+
+                <MudTextField T="string"
+                              Label="Password"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@TogglePasswordVisibility"
+                              @bind-Value="_password"
+                              Immediate="true"
+                              Required="true"
+                              RequiredError="Password is required"
+                              Validation="@(new Func<string, string?>(ValidatePassword))"
+                              Class="mb-3" />
+
+                <MudTextField T="string"
+                              Label="Confirm Password"
+                              InputType="@(_showConfirmPassword ? InputType.Text : InputType.Password)"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showConfirmPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@ToggleConfirmPasswordVisibility"
+                              @bind-Value="_confirmPassword"
+                              Immediate="true"
+                              Required="true"
+                              RequiredError="Confirm password is required"
+                              Validation="@(new Func<string, string?>(ValidateConfirmPassword))" />
+            </MudForm>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@_errorMessage</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@(_isSending || _isVerifying || _isUpdating)">Cancel</MudButton>
+        @if (_step == DialogStep.EnterCredentials)
+        {
+            <MudButton Color="Color.Primary" OnClick="SendOtp" Disabled="@_isSending">
+                @if (_isSending)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Sending...</span>
+                }
+                else
+                {
+                    <span>Send Code</span>
+                }
+            </MudButton>
+        }
+        else if (_step == DialogStep.EnterOtp)
+        {
+            <MudButton Color="Color.Primary" OnClick="VerifyOtp" Disabled="@(_isVerifying || _remainingSeconds <= 0)">
+                @if (_isVerifying)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Verifying...</span>
+                }
+                else
+                {
+                    <span>Verify</span>
+                }
+            </MudButton>
+        }
+        else if (_step == DialogStep.ChangePassword)
+        {
+            <MudButton Color="Color.Primary" OnClick="ChangePassword" Disabled="@_isUpdating">
+                @if (_isUpdating)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                    <span>Updating...</span>
+                }
+                else
+                {
+                    <span>Change Password</span>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private enum DialogStep
+    {
+        EnterCredentials,
+        EnterOtp,
+        ChangePassword
+    }
+
+    private MudForm _credentialsForm = default!;
+    private MudForm _otpForm = default!;
+    private MudForm _passwordForm = default!;
+    private bool _isSending = false;
+    private bool _isResending = false;
+    private bool _isVerifying = false;
+    private bool _isUpdating = false;
+    private DialogStep _step = DialogStep.EnterCredentials;
+
+    private string _username = string.Empty;
+    private string _email = string.Empty;
+    private string _maskedEmail = string.Empty;
+    private string _generatedOtp = string.Empty;
+    private DateTime _otpGeneratedAt;
+    private int _remainingSeconds = 0;
+    private System.Threading.Timer? _countdownTimer;
+    private int _userId;
+
+    private string[] _otpDigits = new string[4];
+    private MudTextField<string>[] _otpInputs = new MudTextField<string>[4];
+
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+    private bool _showPassword = false;
+    private bool _showConfirmPassword = false;
+
+    private string _errorMessage = string.Empty;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address (e.g., example@mail.com)";
+
+        return null;
+    }
+
+    private string? ValidatePassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+            return "Password is required";
+
+        if (password.Length < 6)
+            return "Password must be at least 6 characters";
+
+        return null;
+    }
+
+    private string? ValidateConfirmPassword(string confirmPassword)
+    {
+        if (string.IsNullOrWhiteSpace(confirmPassword))
+            return "Confirm password is required";
+
+        if (confirmPassword != _password)
+            return "Passwords do not match";
+
+        return null;
+    }
+
+    private static string HashPassword(string password)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(password);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
+    }
+
+    private void TogglePasswordVisibility() => _showPassword = !_showPassword;
+    private void ToggleConfirmPasswordVisibility() => _showConfirmPassword = !_showConfirmPassword;
+
+    private string MaskEmail(string email)
+    {
+        var parts = email.Split('@');
+        if (parts.Length != 2) return email;
+
+        var username = parts[0];
+        var domain = parts[1];
+
+        if (username.Length <= 2)
+            return $"{username[0]}***@{domain}";
+
+        return $"{username.Substring(0, 2)}***@{domain}";
+    }
+
+    private string FormatTime(int totalSeconds)
+    {
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes:D2}:{seconds:D2}";
+    }
+
+    private void StartCountdown()
+    {
+        _remainingSeconds = 300; // 5 minutes = 300 seconds
+
+        _countdownTimer?.Dispose();
+        _countdownTimer = new System.Threading.Timer(_ =>
+        {
+            _remainingSeconds--;
+
+            if (_remainingSeconds <= 0)
+            {
+                _countdownTimer?.Dispose();
+                _countdownTimer = null;
+            }
+
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task SendOtp()
+    {
+        await _credentialsForm.Validate();
+
+        if (!_credentialsForm.IsValid)
+            return;
+
+        _isSending = true;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Check for user with matching username AND email
+            var user = await Db.Users.FirstOrDefaultAsync(u => u.Username == _username && u.Email == _email);
+
+            if (user == null)
+            {
+                _errorMessage = "No account found with this username and email combination.";
+                _isSending = false;
+                return;
+            }
+
+            // Check for duplicate emails (safety check)
+            var duplicateEmailCount = await Db.Users.CountAsync(u => u.Email == _email);
+            if (duplicateEmailCount > 1)
+            {
+                _errorMessage = "Multiple accounts detected. Please contact support.";
+                _isSending = false;
+                return;
+            }
+
+            // Generate 4-digit OTP
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.UtcNow;
+            _userId = user.Id;
+
+            // Send email with OTP code
+            await EmailService.SendOtpEmailAsync(_email, _generatedOtp);
+
+            _maskedEmail = MaskEmail(_email);
+            _step = DialogStep.EnterOtp;
+
+            // Start the countdown timer
+            StartCountdown();
+
+            Snackbar.Add($"Verification code sent to {_maskedEmail}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error sending code: {ex.Message}";
+        }
+        finally
+        {
+            _isSending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ResendOtp()
+    {
+        // Ensure we have valid username and email before resending
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Session expired. Please start over.";
+            _step = DialogStep.EnterCredentials;
+            return;
+        }
+
+        _errorMessage = string.Empty;
+        _otpDigits = new string[4];
+        _isResending = true;
+        StateHasChanged();
+
+        try
+        {
+            // Verify user still exists with same credentials
+            var user = await Db.Users.FirstOrDefaultAsync(u => u.Username == _username && u.Email == _email);
+
+            if (user == null)
+            {
+                _errorMessage = "Account verification failed. Please start over.";
+                _step = DialogStep.EnterCredentials;
+                _isResending = false;
+                return;
+            }
+
+            // Generate new OTP
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.UtcNow;
+
+            // Send email with new OTP code
+            await EmailService.SendOtpEmailAsync(_email, _generatedOtp);
+
+            // Restart the countdown timer
+            StartCountdown();
+
+            Snackbar.Add("Verification code resent!", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error resending code: {ex.Message}";
+        }
+        finally
+        {
+            _isResending = false;
+            StateHasChanged();
+        }
+    }
+
+    private void VerifyOtp()
+    {
+        _errorMessage = string.Empty;
+
+        var enteredOtp = string.Join("", _otpDigits);
+
+        if (enteredOtp.Length != 4)
+        {
+            _errorMessage = "Please enter all 4 digits.";
+            return;
+        }
+
+        // Check if OTP has expired
+        var elapsedTime = DateTime.UtcNow - _otpGeneratedAt;
+        if (elapsedTime.TotalMinutes > 5)
+        {
+            _errorMessage = "Verification code has expired. Please request a new one.";
+            _otpDigits = new string[4];
+            return;
+        }
+
+        _isVerifying = true;
+        StateHasChanged();
+
+        try
+        {
+            if (enteredOtp == _generatedOtp)
+            {
+                // Stop the countdown timer
+                _countdownTimer?.Dispose();
+                _countdownTimer = null;
+
+                _step = DialogStep.ChangePassword;
+            }
+            else
+            {
+                _errorMessage = "Invalid verification code. Please try again.";
+                _otpDigits = new string[4];
+            }
+        }
+        finally
+        {
+            _isVerifying = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        await _passwordForm.Validate();
+
+        if (!_passwordForm.IsValid)
+            return;
+
+        _isUpdating = true;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var userInDb = await Db.Users.FindAsync(_userId);
+
+            if (userInDb == null)
+            {
+                _errorMessage = "User not found.";
+                _isUpdating = false;
+                return;
+            }
+
+            // Double-check username and email still match
+            if (userInDb.Username != _username || userInDb.Email != _email)
+            {
+                _errorMessage = "Account verification failed. Please start over.";
+                _isUpdating = false;
+                return;
+            }
+
+            // Hash and update password
+            userInDb.Password = HashPassword(_password);
+
+            await Db.SaveChangesAsync();
+
+            Snackbar.Add("Password changed successfully!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error changing password: {ex.Message}";
+        }
+        finally
+        {
+            _isUpdating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e, int index)
+    {
+        // Move to next input if digit entered
+        if (!string.IsNullOrEmpty(_otpDigits[index]) && index < 3)
+        {
+            await _otpInputs[index + 1].FocusAsync();
+        }
+        // Move to previous input on backspace
+        else if (e.Key == "Backspace" && index > 0 && string.IsNullOrEmpty(_otpDigits[index]))
+        {
+            await _otpInputs[index - 1].FocusAsync();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public void Dispose()
+    {
+        _countdownTimer?.Dispose();
+    }
+}

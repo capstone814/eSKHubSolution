@@ -1,0 +1,157 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Pages.Dialogs
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        @DialogTitle
+    </TitleContent>
+
+    <DialogContent>
+        @if (MostUpcomingEvent != null)
+        {
+            <MudPaper Class="pa-4" Elevation="0" Style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 12px;">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12">
+                        <div style="display: flex; gap: 16px; align-items: start;">
+                            <div style="background: rgba(102, 126, 234, 0.2); border-radius: 12px; padding: 16px; text-align: center; min-width: 80px;">
+                                <div style="font-size: 0.875rem; font-weight: 600; color: #667eea; text-transform: uppercase;">
+                                    @MostUpcomingEvent.EventDate.ToString("MMM")
+                                </div>
+                                <div style="font-size: 2rem; font-weight: 700; line-height: 1; color: #667eea;">
+                                    @MostUpcomingEvent.EventDate.Day
+                                </div>
+                                <div style="font-size: 0.75rem; color: #667eea; margin-top: 4px;">
+                                    @MostUpcomingEvent.EventDate.Year
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.h5" Style="font-weight: 600; margin-bottom: 8px;">
+                                    @MostUpcomingEvent.Title
+                                </MudText>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetEventTypeColor(MostUpcomingEvent.EventType)">
+                                        @MostUpcomingEvent.EventType
+                                    </MudChip>
+                                    @if (MostUpcomingEvent.Audience == "Barangay")
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning">
+                                            @MostUpcomingEvent.TargetBarangay
+                                        </MudChip>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.6;">
+                            @MostUpcomingEvent.Description
+                        </MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <div style="display: flex; align-items: start; gap: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Color="Color.Primary" Style="margin-top: 2px;" />
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.caption" Style="font-weight: 600; color: #666; line-height: 1.2;">Time</MudText>
+                                <MudText Typo="Typo.body2" Style="line-height: 1.5;">@GetTimeDisplay(MostUpcomingEvent.StartTime, MostUpcomingEvent.EndTime)</MudText>
+                            </div>
+                        </div>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <div style="display: flex; align-items: start; gap: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Color="Color.Error" Style="margin-top: 2px;" />
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.caption" Style="font-weight: 600; color: #666; line-height: 1.2;">Location</MudText>
+                                <MudText Typo="Typo.body2" Style="line-height: 1.5;">@MostUpcomingEvent.Location</MudText>
+                            </div>
+                        </div>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <div style="display: flex; align-items: start; gap: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Success" Style="margin-top: 2px;" />
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.caption" Style="font-weight: 600; color: #666; line-height: 1.2;">Organizer</MudText>
+                                <MudText Typo="Typo.body2" Style="line-height: 1.5;">
+                                    @MostUpcomingEvent.Organizer (@MostUpcomingEvent.OrganizerPosition - @MostUpcomingEvent.OrganizerArea)
+                                </MudText>
+                            </div>
+                        </div>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+        else
+        {
+            <div style="text-align: center; padding: 40px 20px;">
+                <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Secondary" Style="margin-bottom: 16px;" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary">No Upcoming Events</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">There are currently no scheduled events.</MudText>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text" Color="Color.Default">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Event? MostUpcomingEvent { get; set; }
+
+    [Parameter]
+    public string DialogTitle { get; set; } = "UPCOMING EVENT";
+
+    private Color GetEventTypeColor(string eventType) => eventType switch
+    {
+        "Meeting" => Color.Info,
+        "Sports" => Color.Success,
+        "Community" => Color.Primary,
+        "Workshop" => Color.Warning,
+        "Training" => Color.Error,
+        "Cultural" => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private string GetTimeDisplay(TimeSpan? startTime, TimeSpan? endTime)
+    {
+        if (startTime == null && endTime == null)
+            return "All day event";
+
+        if (startTime.HasValue && endTime.HasValue)
+        {
+            return $"{FormatTime(startTime.Value)} - {FormatTime(endTime.Value)}";
+        }
+
+        if (startTime.HasValue)
+            return $"Starts at {FormatTime(startTime.Value)}";
+
+        if (endTime.HasValue)
+            return $"Ends at {FormatTime(endTime.Value)}";
+
+        return "All day event";
+    }
+
+    private string FormatTime(TimeSpan time)
+    {
+        var hours = time.Hours;
+        var minutes = time.Minutes;
+        var period = hours >= 12 ? "PM" : "AM";
+
+        if (hours > 12)
+            hours -= 12;
+        else if (hours == 0)
+            hours = 12;
+
+        return $"{hours}:{minutes:D2} {period}";
+    }
+
+    private void Close() => MudDialog.Close();
+}

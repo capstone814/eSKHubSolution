@@ -1,0 +1,121 @@
+﻿@using eSKHub.Components.Model
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h5">Document Details</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h5" Style="font-weight: 600; margin-bottom: 8px;">@Document.Title</MudText>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                    <MudChip T="string" Size="Size.Small" Color="@(Document.IsPublished? Color.Success: Color.Default)">
+                        @(Document.IsPublished ? "Published" : "Draft")
+                    </MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(Document.Category)">
+                        @Document.Category
+                    </MudChip>
+                    @if (Document.FiscalYear.HasValue)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                            FY @Document.FiscalYear
+                        </MudChip>
+                    }
+                    @if (!string.IsNullOrEmpty(Document.Quarter))
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                            @Document.Quarter
+                        </MudChip>
+                    }
+                    <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.RemoveRedEye">
+                        @Document.ViewCount views
+                    </MudChip>
+                </div>
+            </MudItem>
+
+            @if (!string.IsNullOrEmpty(Document.Description))
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Description</MudText>
+                    <MudText Typo="Typo.body2">@Document.Description</MudText>
+                </MudItem>
+            }
+
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Uploaded By</MudText>
+                <MudText Typo="Typo.body2">@Document.UploadedBy</MudText>
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Date Uploaded</MudText>
+                <MudText Typo="Typo.body2">@Document.DateUploaded.ToString("MMMM dd, yyyy hh:mm tt")</MudText>
+            </MudItem>
+
+            @if (Document.DateModified.HasValue)
+            {
+                <MudItem xs="12" sm="6">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Last Modified</MudText>
+                    <MudText Typo="Typo.body2">@Document.DateModified.Value.ToString("MMMM dd, yyyy hh:mm tt")</MudText>
+                </MudItem>
+            }
+
+            @if (Document.FileData != null && Document.FileData.Length > 0)
+            {
+                <MudItem xs="12">
+                    <MudDivider Class="my-3" />
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">Attached Document</MudText>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   OnClick="DownloadDocument">
+                            Download
+                        </MudButton>
+                    </div>
+                    <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="Color.Info">
+                        @(Document.FileName ?? "Document") (@FormatFileSize(Document.FileData.Length))
+                    </MudChip>
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TransparencyDocument Document { get; set; } = default!;
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Budget" => Color.Success,
+        "Resolution" => Color.Primary,
+        "Performance" => Color.Info,
+        "Procurement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string FormatFileSize(int bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private async Task DownloadDocument()
+    {
+        if (Document.FileData != null && !string.IsNullOrEmpty(Document.FileMimeType))
+        {
+            var base64 = Convert.ToBase64String(Document.FileData);
+            var fileName = Document.FileName ?? "document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Document.FileMimeType, base64);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

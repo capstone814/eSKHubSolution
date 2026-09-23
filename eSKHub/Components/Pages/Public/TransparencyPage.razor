@@ -1,0 +1,894 @@
+﻿@page "/transparency"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ThemeService ThemeService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Transparency & Accountability - eSKHub</PageTitle>
+
+<style>
+    .transparency-layout {
+        display: flex;
+        gap: 0;
+        min-height: auto;
+        margin-left: -16px;
+        margin-bottom: 16px;
+    }
+
+    .transparency-drawer {
+        width: 350px;
+        border-right: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        margin-left: 0;
+        padding-left: 0;
+        height: calc(100vh - 65px);
+        position: fixed;
+        top: 65px;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 10;
+    }
+
+    .drawer-header-light {
+        padding: 16px;
+        border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-header-dark {
+        padding: 16px;
+        border-bottom: 2px solid var(--mud-palette-primary);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-filters {
+        padding: 16px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .drawer-list {
+        padding: 8px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .document-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+
+        .document-item:hover {
+            background: var(--mud-palette-action-default-hover);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+        .document-item.selected {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+    .document-item-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .document-item-desc {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .document-item-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.7rem;
+        color: var(--mud-palette-text-secondary);
+        gap: 8px;
+    }
+
+    .document-item-category {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 0.65rem;
+        font-weight: 600;
+    }
+
+    .transparency-content {
+        flex: 1;
+        padding: 32px;
+        overflow-y: auto;
+        margin-left: 350px;
+    }
+
+    .content-header {
+        margin-bottom: 24px;
+    }
+
+    .content-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        line-height: 1.2;
+    }
+
+    .content-meta {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 16px 0;
+        border-bottom: 2px solid var(--mud-palette-secondary);
+        margin-bottom: 24px;
+    }
+
+        .content-meta .mud-chip {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+
+    .content-section {
+        margin-bottom: 32px;
+    }
+
+        .content-section h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--mud-palette-primary);
+        }
+
+        .content-section p, .content-section div {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+    .document-preview {
+        margin-top: 32px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+        .document-preview iframe {
+            width: 100%;
+            height: 800px;
+            border: none;
+        }
+
+        .document-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .document-preview p.mud-typography {
+            position: center;
+            justify-content: center;
+            align-items: center;
+        }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 300px;
+        text-align: center;
+        padding: 32px;
+    }
+
+    .empty-drawer-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        text-align: center;
+    }
+
+    .filter-toggle-button {
+        display: none;
+    }
+
+    .filter-section-desktop {
+        display: flex !important;
+    }
+
+    .filter-section-mobile {
+        display: none !important;
+    }
+
+    .category-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 6px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+
+    .category-tab {
+        padding: 8px 8px;
+        border-radius: 15px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 1px solid var(--mud-palette-divider);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+        .category-tab:hover {
+            background: var(--mud-palette-action-default-hover);
+        }
+
+        .category-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+    .download-btn-small {
+        height: 36px !important;
+        min-height: 36px !important;
+        padding: 8px 16px !important;
+        font-size: 0.875rem !important;
+        text-transform: uppercase !important;
+        font-weight: 600 !important;
+        width: auto !important;
+        max-width: fit-content !important;
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+    }
+
+        .download-btn-small .mud-button-label {
+            font-size: 0.875rem !important;
+            white-space: nowrap !important;
+        }
+
+    @@media (max-width: 600px) {
+        .transparency-layout {
+            flex-direction: column;
+            margin-left: 0;
+        }
+
+        .transparency-drawer {
+            width: 100%;
+            position: relative;
+            border-right: none;
+            top: 10px;
+            border-bottom: 1px solid var(--mud-palette-divider);
+            max-height: 480px;
+            border-radius: 8px;
+        }
+
+            .transparency-drawer.filters-collapsed {
+                max-height: 280px;
+            }
+
+        .filter-section-desktop {
+            display: none !important;
+        }
+
+        .filter-section-mobile {
+            display: flex !important;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+        }
+
+        .filters-hidden {
+            display: none !important;
+        }
+
+        .filters-visible {
+            display: flex !important;
+        }
+
+        .transparency-content {
+            margin-left: 0;
+            max-height: none;
+            padding: 12px;
+            margin-top: 20px;
+        }
+
+        .content-title {
+            font-size: 1.75rem;
+        }
+
+        .document-preview iframe {
+            height: 500px;
+        }
+
+        .content-meta {
+            gap: 8px;
+        }
+
+            .content-meta .mud-chip {
+                font-size: 0.7rem;
+                padding: 4px 8px;
+                height: auto;
+                min-height: 28px;
+            }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0">
+    <div class="transparency-layout">
+        <!-- Drawer -->
+        <div class="transparency-drawer @(!_showFilters ? "filters-collapsed" : "")">
+            <div class="@(ThemeService.IsDarkMode ? "drawer-header-dark" : "drawer-header-light")">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2 header-content">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Style="font-weight: 700;">TRANSPARENCY</MudText>
+                </MudStack>
+                <MudText Typo="Typo.caption" Style="color: #ffffff;">
+                    @_filteredDocuments.Count of @_allDocuments.Count Documents
+                </MudText>
+            </div>
+
+            <div class="drawer-filters">
+                <!-- Mobile Filter Toggle Button -->
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+                           FullWidth="true"
+                           OnClick="@(() => _showFilters = !_showFilters)"
+                           Class="filter-toggle-button">
+                    @(_showFilters ? "Hide Filters" : "Show Filters")
+                </MudButton>
+
+                <!-- Desktop Filters -->
+                <MudStack Spacing="1" Class="filter-section-desktop">
+                    <div class="category-tabs">
+                        <div class="category-tab @(_categoryFilter == "All" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("All"))">
+                            All
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Budget" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Budget"))">
+                            Budget
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Resolution" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Resolution"))">
+                            Resolution
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Performance" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Performance"))">
+                            Performance
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Procurement" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Procurement"))">
+                            Procurement
+                        </div>
+                    </div>
+
+                    <MudSelect T="int?"
+                               Label="Fiscal Year"
+                               @bind-Value="_fiscalYearFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Clearable="true">
+                        @foreach (var year in _availableYears)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)year)">@year</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                        <MudSelectItem Value="@("most-viewed")">Most Viewed</MudSelectItem>
+                    </MudSelect>
+
+                    @if (HasActiveFilters())
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+
+                <!-- Mobile Filters -->
+                <MudStack Spacing="1" Class="@($"filter-section-mobile {(_showFilters ? "filters-visible" : "filters-hidden")}")">
+                    <div class="category-tabs">
+                        <div class="category-tab @(_categoryFilter == "All" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("All"))">
+                            All
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Budget" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Budget"))">
+                            Budget
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Resolution" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Resolution"))">
+                            Resolution
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Performance" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Performance"))">
+                            Performance
+                        </div>
+                        <div class="category-tab @(_categoryFilter == "Procurement" ? "active" : "")"
+                             @onclick="@(() => FilterByCategory("Procurement"))">
+                            Procurement
+                        </div>
+                    </div>
+
+                    <MudSelect T="int?"
+                               Label="Fiscal Year"
+                               @bind-Value="_fiscalYearFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Clearable="true">
+                        @foreach (var year in _availableYears)
+                        {
+                            <MudSelectItem T="int?" Value="@((int?)year)">@year</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                        <MudSelectItem Value="@("most-viewed")">Most Viewed</MudSelectItem>
+                    </MudSelect>
+
+                    @if (HasActiveFilters())
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+            </div>
+
+            <div class="drawer-list">
+                @if (_filteredDocuments.Any())
+                {
+                    @foreach (var doc in _filteredDocuments)
+                    {
+                        var styles = GetCategoryStyles(doc.Category);
+                        <div class="document-item @(_selectedDocument?.Id == doc.Id ? "selected" : "")"
+                             @onclick="() => SelectDocument(doc)">
+                            <div class="document-item-title">@doc.Title</div>
+                            @if (!string.IsNullOrEmpty(doc.Description))
+                            {
+                                <div class="document-item-desc">@doc.Description</div>
+                            }
+                            <div class="document-item-meta">
+                                <span class="document-item-category" style="@($"background: {styles.BackgroundColor}; color: {styles.TextColor};")">
+                                    @doc.Category
+                                </span>
+                                <span>
+                                    @if (doc.FiscalYear.HasValue)
+                                    {
+                                        <text>FY @doc.FiscalYear</text>
+                                    }
+                                    else
+                                    {
+                                        @doc.DateUploaded.ToString("MMM dd, yyyy")
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty-drawer-state">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px; font-weight: 600;">
+                            No Documents Found
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="opacity: 0.7;">
+                            @if (_isLoading)
+                            {
+                                <text>Loading documents...</text>
+                            }
+                            else if (HasActiveFilters())
+                            {
+                                <text>Try adjusting your filters to see more results</text>
+                            }
+                            else
+                            {
+                                <text>There are no published documents at this time</text>
+                            }
+                        </MudText>
+                        @if (HasActiveFilters())
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Clear"
+                                       OnClick="ClearFilters"
+                                       Style="margin-top: 16px;">
+                                Clear Filters
+                            </MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="transparency-content">
+            @if (_selectedDocument != null)
+            {
+                <div class="content-header">
+                    <div class="content-title">@_selectedDocument.Title</div>
+                    <div class="content-meta">
+                        <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(_selectedDocument.Category)" Icon="@Icons.Material.Filled.Category">
+                            @_selectedDocument.Category
+                        </MudChip>
+                        @if (_selectedDocument.FiscalYear.HasValue)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.CalendarToday">
+                                FY @_selectedDocument.FiscalYear
+                            </MudChip>
+                        }
+                        @if (!string.IsNullOrEmpty(_selectedDocument.Quarter))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                                @_selectedDocument.Quarter
+                            </MudChip>
+                        }
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.RemoveRedEye">
+                            @_selectedDocument.ViewCount views
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Icon="@Icons.Material.Filled.Person">
+                            @_selectedDocument.UploadedBy
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Icon="@Icons.Material.Filled.Schedule">
+                            @_selectedDocument.DateUploaded.ToString("MMM dd, yyyy")
+                        </MudChip>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(_selectedDocument.Description))
+                {
+                    <div class="content-section">
+                        <h3>Description</h3>
+                        <p>@_selectedDocument.Description</p>
+                    </div>
+                }
+
+                @if (_selectedDocument.FileData != null && _selectedDocument.FileData.Length > 0)
+                {
+                    <div class="content-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                            <h3>Document Preview</h3>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="DownloadDocument"
+                                       Class="download-btn-small">
+                                Download Document
+                            </MudButton>
+                        </div>
+
+                        <div class="document-preview">
+                            @if (IsImageFile(_selectedDocument.FileMimeType))
+                            {
+                                <img src="@GetDocumentPath(_selectedDocument)" alt="Document preview" />
+                            }
+                            else if (IsPdfFile(_selectedDocument.FileMimeType))
+                            {
+                                <iframe src="@GetDocumentPath(_selectedDocument)" title="Document preview"></iframe>
+                            }
+                            else
+                            {
+                                <MudPaper Class="pa-8" Elevation="0" Style="text-align: center;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Description"
+                                             Size="Size.Large"
+                                             Color="Color.Primary"
+                                             Style="font-size: 64px;" />
+                                    <MudText Typo="Typo.h6" Class="mb-2">Document Available for Download</MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">This document type cannot be previewed in the browser.</MudText>
+                                    <div style="display: flex; justify-content: center; margin-top: 16px;">
+                                        <MudButton Variant="Variant.Outlined"
+                                                   Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.Download"
+                                                   OnClick="DownloadDocument"
+                                                   Class="download-btn-small">
+                                            Download to View
+                                        </MudButton>
+                                    </div>
+                                </MudPaper>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else if (!_isLoading)
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.Description"
+                             Size="Size.Large"
+                             Color="Color.Secondary"
+                             Style="font-size: 80px; margin-bottom: 16px;" />
+                    <MudText Typo="Typo.h5" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                        Select a document
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Choose a document from the list to view its details and content
+                    </MudText>
+                </div>
+            }
+
+            @if (_isLoading)
+            {
+                <div class="empty-state">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Style="margin-top: 16px;">
+                        Loading documents...
+                    </MudText>
+                </div>
+            }
+        </div>
+    </div>
+</MudContainer>
+
+@code {
+    private bool _showFilters = false;
+    private List<TransparencyDocument> _allDocuments = new();
+    private List<TransparencyDocument> _filteredDocuments = new();
+    private TransparencyDocument? _selectedDocument;
+    private bool _isLoading = true;
+
+    private List<int> _availableYears = new();
+
+    private string _categoryFilter = "All";
+    private int? _fiscalYearFilter = null;
+    private string _sortFilter = "newest";
+
+    [SupplyParameterFromQuery(Name = "id")]
+    public int? SelectedDocumentId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "category")]
+    public string? InitialCategory { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ThemeService.OnThemeChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocuments();
+    }
+
+    private async Task LoadDocuments()
+    {
+        _isLoading = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _allDocuments = await db.TransparencyDocuments
+                .Where(d => d.IsPublished)
+                .OrderByDescending(d => d.DateUploaded)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Get available years
+            _availableYears = _allDocuments
+                .Where(d => d.FiscalYear.HasValue)
+                .Select(d => d.FiscalYear!.Value)
+                .Distinct()
+                .OrderByDescending(y => y)
+                .ToList();
+
+            // Apply initial category filter if provided
+            if (!string.IsNullOrEmpty(InitialCategory))
+            {
+                _categoryFilter = InitialCategory;
+            }
+
+            ApplyFilters();
+
+            // Select document if ID provided
+            if (SelectedDocumentId.HasValue)
+            {
+                var doc = _filteredDocuments.FirstOrDefault(d => d.Id == SelectedDocumentId.Value);
+                if (doc != null)
+                {
+                    await SelectDocument(doc);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading documents: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void FilterByCategory(string category)
+    {
+        _categoryFilter = category;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredDocuments = _allDocuments;
+
+        // Apply category filter
+        if (_categoryFilter != "All")
+        {
+            _filteredDocuments = _filteredDocuments
+                .Where(d => d.Category == _categoryFilter)
+                .ToList();
+        }
+
+        // Apply fiscal year filter
+        if (_fiscalYearFilter.HasValue)
+        {
+            _filteredDocuments = _filteredDocuments
+                .Where(d => d.FiscalYear == _fiscalYearFilter.Value)
+                .ToList();
+        }
+
+        // Apply sorting
+        _filteredDocuments = _sortFilter switch
+        {
+            "newest" => _filteredDocuments.OrderByDescending(d => d.DateUploaded).ToList(),
+            "oldest" => _filteredDocuments.OrderBy(d => d.DateUploaded).ToList(),
+            "most-viewed" => _filteredDocuments.OrderByDescending(d => d.ViewCount).ToList(),
+            _ => _filteredDocuments
+        };
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _categoryFilter = "All";
+        _fiscalYearFilter = null;
+        _sortFilter = "newest";
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return _categoryFilter != "All" ||
+               _fiscalYearFilter.HasValue ||
+               _sortFilter != "newest";
+    }
+
+    private async Task SelectDocument(TransparencyDocument doc)
+    {
+        _selectedDocument = doc;
+
+        // Increment view count
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var docInDb = await db.TransparencyDocuments.FindAsync(doc.Id);
+            if (docInDb != null)
+            {
+                docInDb.ViewCount++;
+                await db.SaveChangesAsync();
+                doc.ViewCount = docInDb.ViewCount;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error incrementing view count: {ex.Message}");
+        }
+
+        StateHasChanged();
+    }
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Budget" => Color.Success,
+        "Resolution" => Color.Primary,
+        "Performance" => Color.Info,
+        "Procurement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private (string BorderColor, string BackgroundColor, string TextColor) GetCategoryStyles(string category)
+    {
+        return category switch
+        {
+            "Budget" => ("#10b981", "rgba(16, 185, 129, 0.1)", "#10b981"),
+            "Resolution" => ("#7e6fff", "rgba(126, 111, 255, 0.1)", "#7e6fff"),
+            "Performance" => ("#3b82f6", "rgba(59, 130, 246, 0.1)", "#3b82f6"),
+            "Procurement" => ("#f59e0b", "rgba(245, 158, 11, 0.1)", "#f59e0b"),
+            _ => ("#6b7280", "rgba(107, 114, 128, 0.1)", "#6b7280")
+        };
+    }
+
+    private string GetDocumentPath(TransparencyDocument doc)
+    {
+        if (doc.FileData != null && !string.IsNullOrEmpty(doc.FileMimeType))
+        {
+            return $"data:{doc.FileMimeType};base64,{Convert.ToBase64String(doc.FileData)}";
+        }
+        return string.Empty;
+    }
+
+    private bool IsImageFile(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType.StartsWith("image/");
+    }
+
+    private bool IsPdfFile(string? mimeType)
+    {
+        if (string.IsNullOrEmpty(mimeType)) return false;
+        return mimeType == "application/pdf";
+    }
+
+    private async Task DownloadDocument()
+    {
+        if (_selectedDocument?.FileData != null && !string.IsNullOrEmpty(_selectedDocument.FileMimeType))
+        {
+            var base64 = Convert.ToBase64String(_selectedDocument.FileData);
+            var fileName = _selectedDocument.FileName ?? $"{_selectedDocument.Title}.pdf";
+            await JS.InvokeVoidAsync("downloadFile", fileName, _selectedDocument.FileMimeType, base64);
+        }
+    }
+}

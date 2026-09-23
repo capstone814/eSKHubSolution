@@ -1,0 +1,1822 @@
+@page "/home"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject AuthService AuthService
+@inject OfflineDbService OfflineDb
+@inject OfflineSyncService SyncService
+@inject IAppNotificationService NotifService
+@inject NavigationManager Navigation
+@inject IDownloadService DownloadService
+
+<div class="home-container">
+    @* Welcome Banner *@
+    <div class="welcome-banner">
+        <div class="banner-overlay"></div>
+        <div class="banner-content">
+            <div class="welcome-text">
+                <span class="greeting">Marhay na aldaw,</span>
+                <h1>@(!string.IsNullOrEmpty(AuthService.Fullname) ? AuthService.Fullname : AuthService.Username)!</h1>
+                @if (!string.IsNullOrEmpty(AuthService.Position) || !string.IsNullOrEmpty(AuthService.Area))
+                {
+                    <p class="user-role">@AuthService.Position • @AuthService.Area</p>
+                }
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn logout-btn" @onclick="HandleLogout" title="Logout">
+                    <svg viewBox="0 0 24 24"><path d="M16 17l5-5-5-5M21 12H9M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <button class="icon-btn settings-btn" @onclick='() => Navigation.NavigateTo("/settings")' title="Settings">
+                    <svg viewBox="0 0 24 24"><path d="M12.22 2c.45 0 .85.33.95.78l.45 2.11c1.13.43 2.15 1.09 3.01 1.93l2.02-.73a1 1 0 011.22.42l1.35 2.33a1 1 0 01-.22 1.24l-1.61 1.27c.06.5.09 1.01.09 1.52s-.03 1.02-.09 1.52l1.61 1.27a1 1 0 01.22 1.24l-1.35 2.33a1 1 0 01-1.22.42l-2.02-.73c-.86.84-1.88 1.5-3.01 1.93l-.45 2.11a1 1 0 01-.95.78h-2.7a1 1 0 01-.95-.78l-.45-2.11c-1.13-.43-2.15-1.09-3.01-1.93l-2.02.73a1 1 0 01-1.22-.42l-1.35-2.33a1 1 0 01.22-1.24l1.61-1.27c-.06-.5-.09-1.01-.09-1.52s.03-1.02.09-1.52l-1.61-1.27a1 1 0 01-.22-1.24l1.35-2.33a1 1 0 011.22-.42l2.02.73c.86-.84 1.88-1.5 3.01-1.93l.45-2.11a1 1 0 01.95-.78h2.7zM12 9a3 3 0 100 6 3 3 0 000-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+            </div>
+        </div>
+
+        @* Sync Status Bar *@
+        <div class="sync-bar @(_isOnline ? "online" : "offline")">
+            <div class="sync-info">
+                <span class="pulse-dot"></span>
+                <span>@(_isOnline ? "Connected" : "Offline Mode")</span>
+            </div>
+            @if (_isOnline)
+            {
+                <div class="sync-actions">
+                    <button class="sync-action-btn" @onclick="SyncData" disabled="@_isSyncing">
+                        <svg class="@(_isSyncing ? "spinning" : "")" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m0 0H15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        <span>@(_isSyncing ? "Syncing..." : "Sync")</span>
+                    </button>
+                    <button class="sync-action-btn notif-test" @onclick="TriggerTestNotif" disabled="@_isNotifying" title="Test Notification">
+                        @if (_isNotifying)
+                        {
+                            <div class="mini-spinner"></div>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        }
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="main-content">
+        @* Quick Actions *@
+        <div class="quick-actions-grid">
+            <div class="action-card feedback" @onclick='() => Navigation.NavigateTo("/feedback")'>
+                <div class="action-icon">
+                    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                </div>
+                <span>Feedback</span>
+            </div>
+            <div class="action-card events" @onclick='() => Navigation.NavigateTo("/events")'>
+                <div class="action-icon">
+                    <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                </div>
+                <span>Events</span>
+            </div>
+            <div class="action-card news" @onclick='() => Navigation.NavigateTo("/news")'>
+                <div class="action-icon">
+                    <svg viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2zM7 8h1M7 12h1M7 16h1" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                </div>
+                <span>News</span>
+            </div>
+            <div class="action-card surveys" @onclick='() => Navigation.NavigateTo("/surveys")'>
+                <div class="action-icon">
+                    <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                </div>
+                <span>Surveys</span>
+            </div>
+        </div>
+
+        @* Latest Announcements *@
+        <section class="home-section">
+            <div class="section-header">
+                <h2>Latest Announcements</h2>
+                <button class="view-all-btn" @onclick='() => Navigation.NavigateTo("/announcements")'>View All</button>
+            </div>
+
+            @if (_isLoading)
+            {
+                <div class="shimmer-container">
+                    @for (int i = 0; i < 2; i++)
+                    {
+                        <div class="shimmer-card"></div>
+                    }
+                </div>
+            }
+            else if (!_announcements.Any())
+            {
+                <div class="empty-state-card">
+                    <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <p>No new announcements</p>
+                </div>
+            }
+            @if (_announcements != null && _announcements.Any())
+            {
+                <div class="announcements-vertical-list">
+                    @foreach (var announcement in _announcements.Take(3))
+                    {
+                        if (announcement == null) continue;
+                        <div class="announcement-item" @onclick="() => ShowAnnouncementDetails(announcement)">
+                            <div class="announcement-accent"></div>
+                            <div class="announcement-content">
+                                <h3>@announcement.Subject</h3>
+                                @if (!string.IsNullOrEmpty(announcement.LocalPath))
+                                {
+                                    <div class="announcement-image">
+                                        <LocalImage Path="@announcement.LocalPath" Alt="Announcement Image" />
+                                    </div>
+                                }
+                                <p>@announcement.Body</p>
+                                <div class="announcement-meta">
+                                    <span>By @announcement.Author</span>
+                                    <span>@announcement.DateCreated.ToString("MMM dd")</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        @* Programs & Projects Carousel *@
+        <section class="home-section">
+            <div class="section-header">
+                <h2>Programs & Projects</h2>
+                <button class="view-all-btn" @onclick='() => Navigation.NavigateTo("/programs")'>View All</button>
+            </div>
+
+            <div class="horizontal-scroll-container">
+                @if (!_programs.Any())
+                {
+                    <div class="empty-state-card" style="flex: 1; margin: 0 4px;">
+                        <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-2.094 3.42 3.42 0 004.438 0 3.42 3.42 0 001.946 2.094 3.42 3.42 0 002.094 1.946 3.42 3.42 0 000 4.438 3.42 3.42 0 00-2.094 1.946 3.42 3.42 0 00-1.946 2.094 3.42 3.42 0 00-4.438 0 3.42 3.42 0 00-1.946-2.094 3.42 3.42 0 00-2.094-1.946 3.42 3.42 0 000-4.438 3.42 3.42 0 002.094-1.946z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                        <p>No programs listed</p>
+                    </div>
+                }
+                else if (_programs != null && _programs.Any())
+                {
+                    @foreach (var program in _programs)
+                    {
+                        if (program == null) continue;
+                        <div class="program-card" @onclick="() => ShowProgramDetails(program)">
+                            <div class="program-accent"></div>
+                            <div class="program-card-content">
+                                <div class="program-tag">@program.Status</div>
+                                <div class="program-body">
+                                    <h3>@program.Title</h3>
+                                    <p class="program-category">@program.Category</p>
+
+                                    @if (program.AttachmentType == "image" && !string.IsNullOrEmpty(program.LocalPath))
+                                    {
+                                        <div class="program-image-dashboard">
+                                            <LocalImage Path="@program.LocalPath" Alt="@program.Title" />
+                                        </div>
+                                    }
+
+
+                                    <div class="program-footer">
+                                        <div class="budget">₱@program.Budget.ToString("N0")</div>
+                                        <span class="date">@(string.IsNullOrEmpty(program.Timeline) ? $"{program.StartDate:MMM yyyy}" : program.Timeline)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+
+        @* Events Section *@
+        <section class="home-section">
+            <div class="section-header">
+                <h2>Upcoming Events</h2>
+                <button class="view-all-btn" @onclick='() => Navigation.NavigateTo("/events")'>View All</button>
+            </div>
+            @if (!_events.Any())
+            {
+                <div class="empty-state-card">
+                    <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <p>No upcoming events</p>
+                </div>
+            }
+            else if (_events != null && _events.Any())
+            {
+                <div class="mini-list">
+                    @foreach (var ev in _events.Take(3))
+                    {
+                        if (ev == null) continue;
+                        <div class="mini-card event" @onclick="() => ShowEventDetails(ev)">
+                            <div class="mini-accent"></div>
+                            <div class="mini-card-content">
+                                <div class="mini-date">
+                                    <span class="day">@ev.EventDate.Day</span>
+                                    <span class="month">@ev.EventDate.ToString("MMM")</span>
+                                </div>
+                                <div class="mini-info">
+                                    <h4>@ev.Title</h4>
+                                    <p>@ev.Location</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        @* News Section *@
+        <section class="home-section">
+            <div class="section-header">
+                <h2>Latest News</h2>
+                <button class="view-all-btn" @onclick='() => Navigation.NavigateTo("/news")'>View All</button>
+            </div>
+            @if (!_news.Any())
+            {
+                <div class="empty-state-card">
+                    <svg viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <p>No news articles found</p>
+                </div>
+            }
+            else if (_news != null && _news.Any())
+            {
+                <div class="mini-list">
+                    @foreach (var item in _news.Take(3))
+                    {
+                        if (item == null) continue;
+                        <div class="mini-card news" @onclick="() => ShowNewsDetails(item)">
+                            <div class="mini-accent"></div>
+                            <div class="mini-card-content">
+                                @if (!string.IsNullOrEmpty(item.LocalPath))
+                                {
+                                    <div class="news-thumbnail">
+                                        <LocalImage Path="@item.LocalPath" Alt="@item.Title" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="news-img-placeholder">
+                                        <svg viewBox="0 0 24 24"><path d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+                                    </div>
+                                }
+                                <div class="mini-info">
+                                    <h4>@item.Title</h4>
+                                    <span class="time">@item.DateCreated.ToString("MMM dd")</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+
+    @* Sync Notification Overlay *@
+    @if (!string.IsNullOrEmpty(_syncMessage))
+    {
+        <div class="sync-notification @(_syncSuccess ? "success" : "error")">
+            <div class="notification-content">
+                @if (_syncSuccess)
+                {
+                    <svg viewBox="0 0 24 24" class="noti-icon"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" class="noti-icon"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                }
+                <span>@_syncMessage</span>
+            </div>
+        </div>
+    }
+    @* Modals *@
+
+    @* Announcement Modal *@
+    @if (_selectedAnnouncement != null)
+    {
+        <div class="modal-overlay" @onclick="CloseAnnouncementDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseAnnouncementDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    @if (showAnnouncementImage)
+                    {
+                        <div class="modal-image">
+                            <LocalImage Path="@_selectedAnnouncement?.LocalPath" Alt="Announcement Image" />
+                        </div>
+                    }
+                    <div class="modal-info">
+                        <span class="modal-tag tag-announcement">Announcement</span>
+                        <h2>@_selectedAnnouncement!.Subject</h2>
+                        <div class="modal-meta">
+                            <span>By @_selectedAnnouncement.Author</span>
+                            <span>•</span>
+                            <span>@_selectedAnnouncement.DateCreated.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div class="article-content">
+                            @((MarkupString)(_selectedAnnouncement.Body?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+
+                        @if (_selectedAnnouncement!.AttachmentType != "image" && !string.IsNullOrEmpty(_selectedAnnouncement.Attachment))
+                        {
+                            <div class="file-action-bar">
+                                <button @onclick='() => DownloadService.DownloadFileAsync("announcement_attachment", _selectedAnnouncement!.Attachment!)' class="download-link-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                    Download Attachment
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Program Modal *@
+    @if (_selectedProgram != null)
+    {
+        <div class="modal-overlay" @onclick="CloseProgramDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseProgramDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    @if (showProgramImage)
+                    {
+                        <div class="modal-image">
+                            <LocalImage Path="@_selectedProgram?.LocalPath" Alt="Program Image" />
+                        </div>
+                    }
+                    <div class="modal-info">
+                        <span class="modal-tag tag-program">@_selectedProgram!.Status</span>
+                        <h2>@_selectedProgram.Title</h2>
+                        <div class="modal-meta">
+                            <span>@_selectedProgram.Category</span>
+                            <span>•</span>
+                            <span>Budget: ₱@_selectedProgram.Budget.ToString("N0")</span>
+                        </div>
+                        <div class="article-content">
+                            <p><strong>Description:</strong></p>
+                            <p>@_selectedProgram.Description</p>
+
+                            @if (!string.IsNullOrEmpty(_selectedProgram.Objectives))
+                            {
+                                <p><strong>Objectives:</strong></p>
+                                <p>@((MarkupString)_selectedProgram.Objectives.Replace("\n", "<br/>"))</p>
+                            }
+
+                            @if (!string.IsNullOrEmpty(_selectedProgram.Timeline))
+                            {
+                                <p><strong>Timeline:</strong> @_selectedProgram.Timeline</p>
+                            }
+                        </div>
+
+                        @if (_selectedProgram.AttachmentType != "image" && !string.IsNullOrEmpty(_selectedProgram.Image))
+                        {
+                            <div class="file-action-bar">
+                                <button @onclick='() => DownloadService.DownloadFileAsync("program_attachment", _selectedProgram.Image!)' class="download-link-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                    Download File
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Event Modal *@
+    @if (_selectedEvent != null)
+    {
+        <div class="modal-overlay" @onclick="CloseEventDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal home-event-close" @onclick="CloseEventDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    <div class="home-event-header">
+                        <div class="home-event-date-splash">
+                            <span class="home-event-day">@_selectedEvent.EventDate.Day</span>
+                            <span class="home-event-month">@_selectedEvent.EventDate.ToString("MMMM yyyy")</span>
+                        </div>
+                    </div>
+                    <div class="modal-info">
+                        <span class="home-event-tag">@(_selectedEvent.EventType ?? "Official Event")</span>
+                        <h2>@_selectedEvent.Title</h2>
+
+                        <div class="home-event-info-strip">
+                            <div class="home-info-pill">
+                                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                <span>@_selectedEvent.Location</span>
+                            </div>
+                            @if (_selectedEvent.StartTime.HasValue)
+                            {
+                                <div class="home-info-pill">
+                                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 6v6l4 2" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                    <span>
+                                        @DateTime.Today.Add(_selectedEvent.StartTime.Value).ToString("hh:mm tt")
+                                        @if (_selectedEvent.EndTime.HasValue)
+                                        {
+                                            @($" - {DateTime.Today.Add(_selectedEvent.EndTime.Value).ToString("hh:mm tt")}")
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="home-organizer-banner">
+                            <span class="home-org-label">Organized By</span>
+                            <span class="home-org-value">@(_selectedEvent.Organizer ?? "Community Council")</span>
+                        </div>
+
+                        <div class="home-section-title">About this event</div>
+                        <div class="article-content">
+                            @((MarkupString)(_selectedEvent.Description?.Replace("\n", "<br/>") ?? "No additional details available for this event."))
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* News Modal *@
+    @if (_selectedNews != null)
+    {
+        <div class="modal-overlay" @onclick="CloseNewsDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseNewsDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    @if (showNewsImage)
+                    {
+                        <div class="modal-image">
+                            <LocalImage Path="@_selectedNews?.LocalPath" Alt="News Image" />
+                        </div>
+                    }
+                    <div class="modal-info">
+                        <span class="modal-tag tag-news">News</span>
+                        <h2>@_selectedNews!.Title</h2>
+                        <div class="modal-meta">
+                            <span>By @_selectedNews.Author</span>
+                            <span>•</span>
+                            <span>@_selectedNews.DateCreated.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div class="article-content">
+                            @((MarkupString)((!string.IsNullOrEmpty(_selectedNews.Content) ? _selectedNews.Content : _selectedNews.Summary)?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    :root {
+        --primary: #7e6fff;
+        --secondary: #f093fb;
+        --accent: #ff6b6b;
+        --bg: #f8f9fe;
+        --surface: #ffffff;
+        --text-main: #2d3436;
+        --text-muted: #636e72;
+        --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        background: white;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        border-radius: 30px 30px 0 0;
+        position: relative;
+        overflow: hidden;
+        animation: slideUp 0.3s ease-out;
+        display: flex;
+        flex-direction: column;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .close-modal {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+        color: #2d3436;
+    }
+
+        .close-modal svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    .modal-body {
+        overflow-y: auto;
+        max-height: 90vh;
+        padding-bottom: 40px;
+    }
+
+    .modal-image {
+        width: 100%;
+        max-height: 300px;
+        overflow: hidden;
+        background: #f0f2f5;
+    }
+
+        .modal-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: cover;
+        }
+
+    .modal-info {
+        padding: 24px;
+    }
+
+        .modal-info h2 {
+            font-size: 20px;
+            font-weight: 800;
+            margin: 12px 0 8px;
+            line-height: 1.3;
+            color: #2d3436;
+        }
+
+    .modal-tag {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .tag-announcement {
+        background: #e8eaf6;
+        color: #3f51b5;
+    }
+
+    .tag-program {
+        background: #e1f5fe;
+        color: #0288d1;
+    }
+
+    .tag-event {
+        background: #fff3e0;
+        color: #ef6c00;
+    }
+
+    .tag-news {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .modal-meta {
+        display: flex;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #b2bec3;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .article-content {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #636e72;
+        white-space: pre-wrap;
+    }
+
+    .file-action-bar {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px dashed #dfe6e9;
+    }
+
+    .download-link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #f1f2f6;
+        color: #667eea;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px dashed #667eea;
+        width: 100%;
+        justify-content: center;
+    }
+
+        .download-link-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+    /* Home Event Modal — matches Events.razor style */
+    .home-event-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255,255,255,0.9);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        z-index: 10;
+        color: #2d3436;
+    }
+
+        .home-event-close svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    .home-event-header {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .home-event-date-splash {
+        text-align: center;
+    }
+
+        .home-event-date-splash .home-event-day {
+            font-size: 40px;
+            font-weight: 900;
+            line-height: 1;
+            display: block;
+        }
+
+        .home-event-date-splash .home-event-month {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+    .home-event-tag {
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #ff6b6b;
+        background: #fff0f0;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-bottom: 12px;
+    }
+
+    .home-event-info-strip {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 24px;
+    }
+
+    .home-info-pill {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #636e72;
+    }
+
+        .home-info-pill svg {
+            width: 18px;
+            height: 18px;
+            color: #ff6b6b;
+            flex-shrink: 0;
+        }
+
+    .home-organizer-banner {
+        background: #f8f9fe;
+        padding: 12px 16px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-bottom: 24px;
+    }
+
+        .home-organizer-banner .home-org-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: #b2bec3;
+            text-transform: uppercase;
+        }
+
+        .home-organizer-banner .home-org-value {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+    .home-section-title {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #2d3436;
+        margin-bottom: 10px;
+    }
+
+    * {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .home-container {
+        background-color: var(--bg);
+        min-height: 100vh;
+        padding-bottom: 80px;
+        color: var(--text-main);
+        font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    }
+
+    /* Welcome Banner */
+    .welcome-banner {
+        position: relative;
+        background: var(--gradient);
+        padding: 20px 20px 0;
+        color: white;
+        overflow: hidden;
+    }
+
+    .banner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: radial-gradient(circle at top right, rgba(255,255,255,0.2), transparent);
+        pointer-events: none;
+    }
+
+    .banner-content {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        z-index: 1;
+        margin-bottom: 12px;
+    }
+
+    .welcome-text h1 {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0px 0;
+        letter-spacing: -0.5px;
+    }
+
+    .greeting {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.8;
+    }
+
+    .user-role {
+        font-size: 10px;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 12px;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 4px;
+        margin-bottom: 0px;
+        backdrop-filter: blur(4px);
+    }
+
+    .header-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+    }
+
+        .header-actions .icon-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+
+            .header-actions .icon-btn svg {
+                width: 16px;
+                height: 16px;
+            }
+
+    /* Sync Bar */
+    .sync-bar {
+        position: relative;
+        height: 40px;
+        background: rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        margin-left: -20px;
+        margin-right: -20px;
+        margin-top: 16px;
+        backdrop-filter: blur(10px);
+    }
+
+    .sync-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4caf50;
+    }
+
+    .online .pulse-dot {
+        background: #4caf50;
+        box-shadow: 0 0 10px #4caf50;
+        animation: pulse 2s infinite;
+    }
+
+    .offline .pulse-dot {
+        background: #ff9800;
+    }
+
+    .sync-action-btn {
+        background: transparent;
+        border: none;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+        .sync-action-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+    .syncing svg {
+        animation: spin 1s linear infinite;
+    }
+
+    .sync-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .sync-action-btn {
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        transition: background 0.2s;
+    }
+
+    .sync-action-btn:active {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    .sync-action-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+
+    .sync-action-btn.notif-test {
+        padding: 4px;
+        width: 24px;
+        height: 24px;
+        justify-content: center;
+        border-style: dashed;
+    }
+
+    .mini-spinner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    /* Main Content */
+    .main-content {
+        margin-top: -30px;
+        padding: 0 20px;
+        position: relative;
+        z-index: 2;
+    }
+
+    /* Quick Actions */
+    .quick-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-top: 40px;
+        margin-bottom: 24px;
+    }
+
+    .action-card {
+        background: var(--surface);
+        padding: 8px 8px;
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s;
+    }
+
+        .action-card:active {
+            transform: scale(0.95);
+        }
+
+    .action-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .action-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+
+    .action-card span {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+
+    .action-card.feedback .action-icon {
+        background: #e3f2fd;
+        color: #1e88e5;
+    }
+
+    .action-card.events .action-icon {
+        background: #fff3e0;
+        color: #f4511e;
+    }
+
+    .action-card.news .action-icon {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .action-card.surveys .action-icon {
+        background: #f3e5f5;
+        color: #8e24aa;
+    }
+
+    /* Sections */
+    .home-section {
+        margin-bottom: 28px;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding: 0 4px;
+    }
+
+        .section-header h2 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+    .view-all-btn {
+        background: transparent;
+        border: none;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--primary);
+    }
+
+    /* Announcements List */
+    .announcements-vertical-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .announcement-item {
+        background: var(--surface);
+        border-radius: 16px;
+        display: flex;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+
+    .announcement-accent {
+        width: 6px;
+        background: var(--primary);
+    }
+
+    .announcement-content {
+        padding: 16px;
+        flex: 1;
+    }
+
+    .announcement-image {
+        width: 100%;
+        height: 100px;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 10px;
+        background: #f0f2f5;
+    }
+
+        .announcement-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .announcement-content h3 {
+        font-size: 12px;
+        margin: 4px 0 8px;
+        line-height: 1.3;
+    }
+
+    .announcement-content p {
+        font-size: 8px;
+        color: var(--text-muted);
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .announcement-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 10px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #b2bec3;
+    }
+
+    /* Horizontal Scroll (Carousel) */
+    .horizontal-scroll-container {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding: 4px 4px 16px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+        .horizontal-scroll-container::-webkit-scrollbar {
+            display: none;
+        }
+
+    .program-card {
+        flex: 0 0 260px;
+        background: var(--surface);
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        position: relative;
+        display: flex;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .program-accent {
+        width: 6px;
+        background: var(--secondary);
+        flex-shrink: 0;
+    }
+
+    .program-card-content {
+        flex: 1;
+        padding: 16px;
+        position: relative;
+    }
+
+    .program-image-dashboard {
+        width: 100%;
+        height: 80px;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 8px 0;
+        background: #f0f2f5;
+    }
+
+        .program-image-dashboard img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .file-action-bar-mini {
+        margin: 8px 0;
+    }
+
+    .download-link-btn-mini {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #f1f2f6;
+        color: var(--primary);
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 9px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px dashed var(--primary);
+        cursor: pointer;
+        width: auto;
+        font-family: inherit;
+    }
+
+        .download-link-btn-mini svg {
+            width: 10px;
+            height: 10px;
+        }
+
+    .program-tag {
+        position: absolute;
+        top: 70px;
+        right: 12px;
+        padding: 3px 8px;
+        background: #e1f5fe;
+        color: #0288d1;
+        font-size: 7px;
+        font-weight: 800;
+        border-radius: 6px;
+        text-transform: uppercase;
+        z-index: 1;
+    }
+
+    .program-body h3 {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        padding-right: 40px;
+    }
+
+    .program-category {
+        font-size: 8px;
+        color: var(--primary);
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .program-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+    }
+
+    .budget {
+        color: var(--primary);
+        font-weight: 800;
+        font-size: 12px;
+    }
+
+    .program-footer .date {
+        font-size: 8px;
+        font-weight: 600;
+        color: #b2bec3;
+        text-align: right;
+    }
+
+    /* Two Column Layout */
+    .two-column-layout {
+        display: flex;
+        gap: 20px;
+    }
+
+    .home-section.half {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .mini-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .mini-card {
+        background: var(--surface);
+        border-radius: 14px;
+        display: flex;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        align-items: stretch;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .mini-accent {
+        width: 4px;
+        flex-shrink: 0;
+    }
+
+    .event .mini-accent {
+        background: var(--accent);
+    }
+
+    .news .mini-accent {
+        background: #2ecc71;
+    }
+
+    .mini-card-content {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+    }
+
+    .mini-date {
+        background: #f0f3ff;
+        color: var(--primary);
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .mini-date .day {
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .mini-date .month {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+    .mini-info h4 {
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .mini-info p, .mini-info .time {
+        font-size: 8px;
+        color: var(--text-muted);
+    }
+
+    .news-thumbnail {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+        .news-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .news-img-placeholder {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: #f1f2f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #b2bec3;
+        flex-shrink: 0;
+    }
+
+        .news-img-placeholder svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    /* Notifications */
+    .sync-notification {
+        position: fixed;
+        bottom: 24px;
+        left: 20px;
+        right: 20px;
+        z-index: 1000;
+        animation: slideIn 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    }
+
+    .notification-content {
+        padding: 16px 20px;
+        border-radius: 16px;
+        background: #2d3436;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .success .notification-content {
+        background: #4caf50;
+    }
+
+    .error .notification-content {
+        background: #ff5252;
+    }
+
+    .noti-icon {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    .notification-content span {
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    /* Utilities */
+    .empty-state-card {
+        background: white;
+        border-radius: 16px;
+        padding: 30px;
+        text-align: center;
+        color: #b2bec3;
+        box-shadow: var(--shadow);
+    }
+
+        .empty-state-card svg {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 12px;
+            opacity: 0.3;
+        }
+
+    .small-empty {
+        font-size: 12px;
+        color: #b2bec3;
+        text-align: center;
+        padding: 20px;
+        background: white;
+        border-radius: 12px;
+    }
+
+    @@keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+        }
+
+        70% {
+            box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+        }
+    }
+
+    @@keyframes slideIn {
+        from {
+            transform: translateY(100px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    /* Shimmer Effect */
+    .shimmer-card {
+        height: 100px;
+        background: #eee;
+        background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+        border-radius: 16px;
+        background-size: 200% 100%;
+        animation: shimmer 1.5s linear infinite;
+        margin-bottom: 12px;
+    }
+
+    @@keyframes shimmer {
+        to {
+            background-position-x: -200%;
+        }
+    }
+</style>
+
+@code {
+    private List<OfflineAnnouncement> _announcements = new();
+    private List<OfflineEvent> _events = new();
+    private List<OfflineProgramProject> _programs = new();
+    private List<OfflineNewsArticle> _news = new();
+    private List<OfflinePoll> _polls = new();
+
+    private bool _isLoading = true;
+    private bool _isOnline = true;
+    private bool _isSyncing = false;
+    private bool _isNotifying = false;
+    private string _syncMessage = string.Empty;
+    private bool _syncSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check authentication
+        if (!AuthService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        // Check network
+        _isOnline = Connectivity.Current.NetworkAccess == NetworkAccess.Internet;
+        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
+
+        // Load data from local DB
+        await LoadDataAsync();
+    }
+
+
+
+    // Auto-Popup Queue
+    private Queue<(string Type, int Id, object Item)> _popupQueue = new();
+    private bool _isAutoPopup = false;
+
+    private void ProcessPopupQueue()
+    {
+        if (_popupQueue.Count > 0)
+        {
+            var next = _popupQueue.Dequeue();
+            _isAutoPopup = true;
+
+            if (next.Type == "Announcement")
+            {
+                _selectedAnnouncement = (OfflineAnnouncement)next.Item;
+            }
+            else if (next.Type == "Event")
+            {
+                _selectedEvent = (OfflineEvent)next.Item;
+            }
+            // Add other types if needed, but user requested Announcements and Events.
+
+            StateHasChanged();
+        }
+        else
+        {
+            _isAutoPopup = false;
+        }
+    }
+
+    private bool IsItemSeen(string type, int id)
+    {
+        try
+        {
+            if (id <= 0) return false;
+            var seenList = Preferences.Get($"seen_{type.ToLower()}s", string.Empty);
+            if (string.IsNullOrEmpty(seenList)) return false;
+
+            var seenIds = seenList.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(s => int.TryParse(s, out var val) ? val : (int?)null)
+                                 .Where(v => v.HasValue)
+                                 .Select(v => v!.Value)
+                                 .ToHashSet();
+            return seenIds.Contains(id);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void MarkItemSeen(string type, int id)
+    {
+        if (id <= 0) return; // Don't track invalid IDs
+        var key = $"seen_{type.ToLower()}s";
+        var seenList = Preferences.Get(key, string.Empty);
+        var seenIds = seenList.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                             .Select(s => int.TryParse(s, out var val) ? val : (int?)null)
+                             .Where(v => v.HasValue)
+                             .Select(v => v!.Value)
+                             .ToHashSet();
+
+        if (seenIds.Add(id))
+        {
+            var newList = string.Join(",", seenIds);
+            Preferences.Set(key, newList);
+            Console.WriteLine($"[CouncilHome] Marked {type} {id} as seen. New list: {newList}");
+        }
+    }
+
+    // Modal State
+    private OfflineAnnouncement? _selectedAnnouncement;
+    private OfflineProgramProject? _selectedProgram;
+    private OfflineEvent? _selectedEvent;
+    private OfflineNewsArticle? _selectedNews;
+
+    private bool showAnnouncementImage => _selectedAnnouncement?.AttachmentType == "image" && !string.IsNullOrEmpty(_selectedAnnouncement.LocalPath);
+    private bool showProgramImage => _selectedProgram?.AttachmentType == "image" && !string.IsNullOrEmpty(_selectedProgram.LocalPath);
+    private bool showNewsImage => !string.IsNullOrEmpty(_selectedNews?.LocalPath);
+
+    // Show Details Methods
+    private void ShowAnnouncementDetails(OfflineAnnouncement item)
+    {
+        _selectedAnnouncement = item;
+        // If manually opened, do not set _isAutoPopup = true.
+        StateHasChanged();
+    }
+
+    private void CloseAnnouncementDetails()
+    {
+        if (_isAutoPopup && _selectedAnnouncement != null)
+        {
+            MarkItemSeen("Announcement", _selectedAnnouncement.RemoteId);
+            _selectedAnnouncement = null;
+            ProcessPopupQueue(); // Show next
+        }
+        else
+        {
+            _selectedAnnouncement = null;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowProgramDetails(OfflineProgramProject item) { _selectedProgram = item; StateHasChanged(); }
+    private void CloseProgramDetails() { _selectedProgram = null; StateHasChanged(); }
+
+    private void ShowEventDetails(OfflineEvent item)
+    {
+        _selectedEvent = item;
+        StateHasChanged();
+    }
+
+    private void CloseEventDetails()
+    {
+        if (_isAutoPopup && _selectedEvent != null)
+        {
+            MarkItemSeen("Event", _selectedEvent.RemoteId);
+            _selectedEvent = null;
+            ProcessPopupQueue(); // Show next
+        }
+        else
+        {
+            _selectedEvent = null;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowNewsDetails(OfflineNewsArticle item) { _selectedNews = item; StateHasChanged(); }
+    private void CloseNewsDetails() { _selectedNews = null; StateHasChanged(); }
+
+    private async Task SyncData()
+    {
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+        {
+            _syncSuccess = false;
+            _syncMessage = "✗ No internet connection.";
+            StateHasChanged();
+            await Task.Delay(3000);
+            _syncMessage = string.Empty;
+            StateHasChanged();
+            return;
+        }
+
+        _isSyncing = true;
+        _syncMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Use the OfflineSyncService directly if possible, or AuthService.SyncAnnouncementsAsync
+            // Actually, AuthService.SyncAnnouncementsAsync probably calls OfflineSyncService.
+            // Let's check AuthService.cs in mobile.
+            var syncResult = await AuthService.SyncAnnouncementsAsync();
+
+            if (syncResult)
+            {
+                _syncSuccess = true;
+                _syncMessage = "Sync completed successfully!";
+                await LoadDataAsync();
+            }
+            else
+            {
+                _syncSuccess = false;
+                _syncMessage = "Sync failed. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _syncSuccess = false;
+            _syncMessage = $"✗ Error: {ex.Message}";
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+
+            // Clear message after 3 seconds
+            await Task.Delay(3000);
+            _syncMessage = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TriggerTestNotif()
+    {
+        _isNotifying = true;
+        StateHasChanged();
+
+        try
+        {
+            // Fire the notification immediately in the background
+            var notifTask = NotifService.ShowNotificationAsync("Test Notification", "Device notifications are working correctly!");
+
+            // Keep the spinner moving for 1 second for visual feedback
+            await Task.Delay(5000);
+
+            // Ensure the notification call is fully complete
+            await notifTask;
+        }
+        finally
+        {
+            _isNotifying = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            _isLoading = true; // Ensure state is reset
+
+            var announcementsTask = OfflineDb.GetItemsAsync<OfflineAnnouncement>();
+            var programsTask = OfflineDb.GetItemsAsync<OfflineProgramProject>();
+            var eventsTask = OfflineDb.GetItemsAsync<OfflineEvent>();
+            var newsTask = OfflineDb.GetItemsAsync<OfflineNewsArticle>();
+
+            await Task.WhenAll(announcementsTask, programsTask, eventsTask, newsTask);
+
+            _announcements = (await announcementsTask ?? new List<OfflineAnnouncement>())
+                                .OrderByDescending(a => a.Priority)
+                                .ThenByDescending(a => a.DateCreated).ToList();
+
+            _programs = (await programsTask ?? new List<OfflineProgramProject>())
+                                .OrderByDescending(p => p.DateCreated).ToList();
+
+            _events = (await eventsTask ?? new List<OfflineEvent>())
+                                .OrderBy(e => e.EventDate)
+                                .Where(e => e.EventDate >= DateTime.Today && 
+                                           (string.IsNullOrEmpty(e.Audience) || 
+                                            e.Audience.Equals("Public", StringComparison.OrdinalIgnoreCase) || 
+                                            (e.Audience.Equals("Barangay", StringComparison.OrdinalIgnoreCase) && e.TargetBarangay == AuthService.Area)))
+                                .ToList();
+
+            _news = (await newsTask ?? new List<OfflineNewsArticle>())
+                                .OrderByDescending(n => n.DateCreated).ToList();
+
+            // Build Queue for Auto-Popups
+            _popupQueue.Clear();
+
+            // Queue Announcements
+            foreach (var a in _announcements)
+            {
+                if (a != null && !IsItemSeen("Announcement", a.RemoteId))
+                {
+                    _popupQueue.Enqueue(("Announcement", a.RemoteId, a));
+                }
+            }
+
+            // Queue Events
+            foreach (var e in _events)
+            {
+                if (e != null && !IsItemSeen("Event", e.RemoteId))
+                {
+                    _popupQueue.Enqueue(("Event", e.RemoteId, e));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CouncilHome] Error loading database items: {ex.Message}");
+            // Fallback to empty lists if load failed to prevent render crashes
+            _announcements ??= new();
+            _programs ??= new();
+            _events ??= new();
+            _news ??= new();
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+
+            // Start showing popups AFTER the main page has rendered
+            await Task.Delay(100);
+            ProcessPopupQueue();
+        }
+    }
+
+    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+    {
+        _isOnline = e.NetworkAccess == NetworkAccess.Internet;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetCategoryColor(string? category)
+    {
+        return "#74b9ff"; // Default theme blue
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+    }
+}

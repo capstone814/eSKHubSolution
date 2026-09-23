@@ -1,0 +1,434 @@
+﻿@page "/page-content-manage"
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using System.Text.Json
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject UserStateService UserState
+@inject IDialogService DialogService
+
+<PageTitle>Manage Page Content</PageTitle>
+
+<style>
+    .page-content-card {
+        margin-bottom: 24px;
+        border-left: 4px solid #7e6fff;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+        .page-content-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+        }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px;
+        background: linear-gradient(135deg, rgba(126, 111, 255, 0.08) 0%, rgba(118, 75, 162, 0.05) 100%);
+        gap: 16px;
+    }
+
+    .page-icon-wrapper {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .page-icon-wrapper .mud-icon-root {
+            color: white;
+            font-size: 28px;
+        }
+
+    .page-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .page-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .page-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .status-configured {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+    }
+
+    .status-not-configured {
+        background: rgba(245, 158, 11, 0.1);
+        color: #f59e0b;
+    }
+
+    .page-timestamp {
+        font-size: 0.8rem;
+        opacity: 0.7;
+    }
+
+    .edit-button {
+        flex-shrink: 0;
+    }
+
+    .header-section {
+        margin-bottom: 40px;
+    }
+
+    .header-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #667eea;
+    }
+
+    .header-description {
+        font-size: 1rem;
+        opacity: 0.7;
+        max-width: 700px;
+    }
+
+    @@media (max-width: 960px) {
+        .page-header {
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+
+        .page-icon-wrapper {
+            width: 48px;
+            height: 48px;
+        }
+
+            .page-icon-wrapper .mud-icon-root {
+                font-size: 24px;
+            }
+
+        .page-title {
+            font-size: 1.1rem;
+        }
+
+        .edit-button {
+            width: 100%;
+        }
+
+            .edit-button .mud-button-root {
+                width: 100%;
+            }
+    }
+
+    @@media (max-width: 600px) {
+        .page-content-card {
+            margin-bottom: 16px;
+            border-left-width: 3px;
+        }
+
+        .page-header {
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .page-icon-wrapper {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+        }
+
+            .page-icon-wrapper .mud-icon-root {
+                font-size: 20px;
+            }
+
+        .page-title {
+            font-size: 1rem;
+        }
+
+        .page-meta {
+            gap: 6px;
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+        }
+
+        .page-timestamp {
+            font-size: 0.75rem;
+        }
+
+        .header-section {
+            margin-bottom: 24px;
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+        }
+
+        .header-description {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <div class="header-section">
+        <h1 class="header-title">Manage Page Content</h1>
+        <p class="header-description">
+            Customize and update the content for your website's public pages. Changes are reflected immediately after saving.
+        </p>
+    </div>
+
+    <!-- Contact Us Page -->
+    <MudCard Class="page-content-card" Elevation="3">
+        <div class="page-header">
+            <div class="page-icon-wrapper">
+                <MudIcon Icon="@Icons.Material.Filled.ContactMail" />
+            </div>
+            <div class="page-info">
+                <div class="page-title">Contact Us Page</div>
+                <div class="page-meta">
+                    @if (_contactUsContent != null)
+                    {
+                        <span class="status-badge status-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                            Configured
+                        </span>
+                        <span class="page-timestamp">
+                            Updated @_contactUsContent.DateModified.ToString("MMM dd, yyyy")
+                            @if (!string.IsNullOrEmpty(_contactUsContent.ModifiedBy))
+                            {
+                                <text> by @_contactUsContent.ModifiedBy</text>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="status-badge status-not-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                            Not Configured
+                        </span>
+                    }
+                </div>
+            </div>
+            <div class="edit-button">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@(() => OpenContactUsEditor())"
+                           Size="Size.Medium">
+                    Edit Content
+                </MudButton>
+            </div>
+        </div>
+    </MudCard>
+
+    <!-- Privacy Policy Page -->
+    <MudCard Class="page-content-card" Elevation="3">
+        <div class="page-header">
+            <div class="page-icon-wrapper">
+                <MudIcon Icon="@Icons.Material.Filled.Policy" />
+            </div>
+            <div class="page-info">
+                <div class="page-title">Privacy Policy Page</div>
+                <div class="page-meta">
+                    @if (_privacyPolicyContent != null)
+                    {
+                        <span class="status-badge status-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                            Configured
+                        </span>
+                        <span class="page-timestamp">
+                            Updated @_privacyPolicyContent.DateModified.ToString("MMM dd, yyyy")
+                            @if (!string.IsNullOrEmpty(_privacyPolicyContent.ModifiedBy))
+                            {
+                                <text> by @_privacyPolicyContent.ModifiedBy</text>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="status-badge status-not-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                            Not Configured
+                        </span>
+                    }
+                </div>
+            </div>
+            <div class="edit-button">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@(() => OpenPrivacyPolicyEditor())"
+                           Size="Size.Medium">
+                    Edit Content
+                </MudButton>
+            </div>
+        </div>
+    </MudCard>
+
+    <!-- About Page -->
+    <MudCard Class="page-content-card" Elevation="3">
+        <div class="page-header">
+            <div class="page-icon-wrapper">
+                <MudIcon Icon="@Icons.Material.Filled.Info" />
+            </div>
+            <div class="page-info">
+                <div class="page-title">About Page</div>
+                <div class="page-meta">
+                    @if (_aboutPageContent != null)
+                    {
+                        <span class="status-badge status-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                            Configured
+                        </span>
+                        <span class="page-timestamp">
+                            Updated @_aboutPageContent.DateModified.ToString("MMM dd, yyyy")
+                            @if (!string.IsNullOrEmpty(_aboutPageContent.ModifiedBy))
+                            {
+                                <text> by @_aboutPageContent.ModifiedBy</text>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="status-badge status-not-configured">
+                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" />
+                            Not Configured
+                        </span>
+                    }
+                </div>
+            </div>
+            <div class="edit-button">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Edit"
+                           OnClick="@(() => OpenAboutPageEditor())"
+                           Size="Size.Medium">
+                    Edit Content
+                </MudButton>
+            </div>
+        </div>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private PageContent? _contactUsContent;
+    private PageContent? _privacyPolicyContent;
+    private PageContent? _aboutPageContent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        await LoadPageContents();
+    }
+
+    private async Task LoadPageContents()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        _contactUsContent = await db.PageContents
+            .FirstOrDefaultAsync(p => p.PageName == "ContactUs");
+
+        _privacyPolicyContent = await db.PageContents
+            .FirstOrDefaultAsync(p => p.PageName == "PrivacyPolicy");
+
+        _aboutPageContent = await db.PageContents
+            .FirstOrDefaultAsync(p => p.PageName == "AboutPage");
+    }
+
+    private async Task OpenContactUsEditor()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Content", _contactUsContent }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditContactUsDialog>("Edit Contact Us Page", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadPageContents();
+            Snackbar.Add("Contact Us page content updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenPrivacyPolicyEditor()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Content", _privacyPolicyContent }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditPrivacyPolicyDialog>("Edit Privacy Policy Page", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadPageContents();
+            Snackbar.Add("Privacy Policy page content updated successfully!", Severity.Success);
+        }
+    }
+
+    private async Task OpenAboutPageEditor()
+    {
+        var parameters = new DialogParameters
+        {
+            { "Content", _aboutPageContent }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditAboutPageDialog>("Edit About Page", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadPageContents();
+            Snackbar.Add("About page content updated successfully!", Severity.Success);
+        }
+    }
+}

@@ -1,0 +1,556 @@
+@page "/programs"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject AuthService AuthService
+@inject OfflineDbService OfflineDb
+@inject NavigationManager Navigation
+@inject IDownloadService DownloadService
+
+<div class="page-container">
+    <header class="page-header">
+        <button class="back-btn" @onclick='() => Navigation.NavigateTo("/home")'>
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <h1>Programs & Projects</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <div class="content-area">
+        @if (_isLoading)
+        {
+            <div class="shimmer-list">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="shimmer-card"></div>
+                }
+            </div>
+        }
+        else if (!_programs.Any())
+        {
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-2.094 3.42 3.42 0 004.438 0 3.42 3.42 0 001.946 2.094 3.42 3.42 0 002.094 1.946 3.42 3.42 0 000 4.438 3.42 3.42 0 00-2.094 1.946 3.42 3.42 0 00-1.946 2.094 3.42 3.42 0 00-4.438 0 3.42 3.42 0 00-1.946-2.094 3.42 3.42 0 00-2.094-1.946 3.42 3.42 0 000-4.438 3.42 3.42 0 002.094-1.946z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <p>No programs found</p>
+            </div>
+        }
+        else
+        {
+            <div class="programs-list">
+                <Virtualize Items="_programs" Context="program">
+                    <div class="program-card" @onclick="() => ShowDetails(program)">
+                        <div class="program-accent"></div>
+                        <div class="program-card-content">
+                            <div class="program-info">
+                                <div class="program-header-row">
+                                    <span class="category-tag">@program.Category</span>
+                                    <span class="status-badge @(program.Status?.ToLower())">@program.Status</span>
+                                </div>
+                                <h3>@program.Title</h3>
+                                <p>@program.Description</p>
+                                <div class="program-meta-list">
+                                    <span class="budget-info">₱@program.Budget.ToString("N0")</span>
+                                    <span class="bullet">•</span>
+                                    <span>@program.DateCreated.ToString("MMM dd, yyyy")</span>
+                                </div>
+                            </div>
+                            @if (program.AttachmentType == "image" && !string.IsNullOrEmpty(program.LocalPath))
+                            {
+                                <div class="program-image-thumb">
+                                    <LocalImage Path="@program.LocalPath" Alt="Thumbnail" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </Virtualize>
+            </div>
+        }
+    </div>
+
+    @if (_selectedProgram != null)
+    {
+        <div class="modal-overlay" @onclick="CloseDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    @if (showImageInModal)
+                    {
+                        <div class="modal-image">
+                            <LocalImage Path="@_selectedProgram?.LocalPath" Alt="Program Image" />
+                        </div>
+                    }
+                    <div class="modal-info">
+                        <div class="modal-header-tags">
+                            <span class="category-tag">@(_selectedProgram?.Category)</span>
+                            <span class="status-badge @(_selectedProgram?.Status?.ToLower())">@(_selectedProgram?.Status)</span>
+                        </div>
+                        <h2>@(_selectedProgram?.Title)</h2>
+
+                        <div class="program-details-grid">
+                            <div class="detail-item">
+                                <span class="label">Proposed By</span>
+                                <span class="value">@(_selectedProgram?.ProposedBy)</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Budget</span>
+                                <span class="value primary-color">₱@(_selectedProgram?.Budget.ToString("N0"))</span>
+                            </div>
+                            <div class="detail-item full-width">
+                                <span class="label">Target Beneficiaries</span>
+                                <span class="value">@(_selectedProgram?.TargetBeneficiaries)</span>
+                            </div>
+                            <div class="detail-item full-width">
+                                <span class="label">Timeline</span>
+                                <span class="value">@(string.IsNullOrEmpty(_selectedProgram?.Timeline) ? $"{_selectedProgram?.StartDate:MMM dd, yyyy} - {_selectedProgram?.EndDate:MMM dd, yyyy}" : _selectedProgram?.Timeline)</span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_selectedProgram?.Venue))
+                            {
+                                <div class="detail-item full-width">
+                                    <span class="label">Venue</span>
+                                    <span class="value">@(_selectedProgram?.Venue)</span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="section-title">Description</div>
+                        <div class="article-content">
+                            @((MarkupString)(_selectedProgram?.Description?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_selectedProgram?.Image) || !string.IsNullOrEmpty(_selectedProgram?.LocalPath))
+                        {
+                            <div class="file-action-bar">
+                                <button @onclick='() => DownloadService.DownloadFileAsync("program_attachment", _selectedProgram.Image!)' class="download-link-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                    Download Attachment (@(_selectedProgram.AttachmentType ?? "Document"))
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .page-container {
+        background-color: #f8f9fe;
+        min-height: 100vh;
+        color: #2d3436;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 10px 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+        .page-header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+    .header-spacer {
+        width: 40px;
+    }
+
+    .back-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+
+        .back-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+    .content-area {
+        padding: 20px;
+    }
+
+    .programs-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .program-card {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.06);
+        display: flex;
+        align-items: stretch;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+        .program-card:active {
+            transform: scale(0.98);
+        }
+
+    .program-accent {
+        width: 6px;
+        background: #f093fb;
+        flex-shrink: 0;
+    }
+
+    .program-card-content {
+        flex: 1;
+        display: flex;
+        align-items: stretch;
+    }
+
+    .program-info {
+        padding: 16px;
+        flex: 1;
+    }
+
+    .program-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .category-tag {
+        font-size: 8px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #7e6fff;
+        background: #f3e5f5;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+
+    .status-badge {
+        font-size: 8px;
+        font-weight: 800;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+
+        .status-badge.approved {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-badge.pending {
+            background: #fff3e0;
+            color: #f4511e;
+        }
+
+        .status-badge.ongoing {
+            background: #e1f5fe;
+            color: #0288d1;
+        }
+
+    .program-info h3 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 6px;
+        line-height: 1.4;
+        color: #2d3436;
+    }
+
+    .program-info p {
+        font-size: 11px;
+        color: #636e72;
+        line-height: 1.6;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    .program-meta-list {
+        display: flex;
+        gap: 6px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #b2bec3;
+        align-items: center;
+    }
+
+    .budget-info {
+        color: #667eea;
+        font-weight: 800;
+    }
+
+    .bullet {
+        opacity: 0.5;
+    }
+
+    .program-image-thumb {
+        width: 80px;
+        background: #f1f2f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+
+        .program-image-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #b2bec3;
+    }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+    .shimmer-card {
+        height: 120px;
+        background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+        border-radius: 20px;
+        background-size: 200% 100%;
+        animation: shimmer 1.5s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    @@keyframes shimmer {
+        to {
+            background-position-x: -200%;
+        }
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        background: white;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        border-radius: 30px 30px 0 0;
+        position: relative;
+        overflow: hidden;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .close-modal {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+        color: #2d3436;
+    }
+
+        .close-modal svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    .modal-body {
+        overflow-y: auto;
+        max-height: 90vh;
+    }
+
+    .modal-image {
+        width: 100%;
+        max-height: 250px;
+        overflow: hidden;
+    }
+
+        .modal-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+    .modal-info {
+        padding: 24px;
+    }
+
+    .modal-header-tags {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .modal-info h2 {
+        font-size: 20px;
+        font-weight: 800;
+        margin: 0 0 20px;
+        line-height: 1.3;
+        color: #2d3436;
+    }
+
+    .program-details-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        background: #f8f9fe;
+        padding: 16px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+        .detail-item.full-width {
+            grid-column: span 2;
+        }
+
+        .detail-item .label {
+            font-size: 9px;
+            font-weight: 700;
+            color: #b2bec3;
+            text-transform: uppercase;
+        }
+
+        .detail-item .value {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+    .primary-color {
+        color: #667eea !important;
+    }
+
+    .section-title {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #2d3436;
+        margin-bottom: 12px;
+        border-left: 3px solid #667eea;
+        padding-left: 8px;
+    }
+
+    .article-content {
+        font-size: 13px;
+        line-height: 1.7;
+        color: #636e72;
+        margin-bottom: 24px;
+    }
+
+    .file-action-bar {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px dashed #dfe6e9;
+    }
+
+    .download-link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #f1f2f6;
+        color: #667eea;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px dashed #667eea;
+        cursor: pointer;
+    }
+
+        .download-link-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+</style>
+
+@code {
+    private List<OfflineProgramProject> _programs = new();
+    private bool _isLoading = true;
+    private OfflineProgramProject? _selectedProgram;
+    private bool showImageInModal => _selectedProgram?.AttachmentType == "image" && !string.IsNullOrEmpty(_selectedProgram.LocalPath);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _programs = await OfflineDb.GetItemsAsync<OfflineProgramProject>();
+            _programs = _programs.OrderByDescending(p => p.DateCreated).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading programs: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDetails(OfflineProgramProject program)
+    {
+        _selectedProgram = program;
+        StateHasChanged();
+    }
+
+    private void CloseDetails()
+    {
+        _selectedProgram = null;
+        StateHasChanged();
+    }
+}

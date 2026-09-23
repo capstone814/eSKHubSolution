@@ -1,0 +1,201 @@
+﻿.youthhome-welcome-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 16px;
+    margin-top: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+    .youthhome-welcome-banner::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+    }
+
+.youthhome-welcome-content {
+    position: relative;
+    z-index: 10;
+}
+
+.youthhome-quick-action-card {
+    transition: all 0.3s ease;
+    border: 1px solid rgba(126, 111, 255, 0.2);
+    height: 100%;
+    cursor: pointer;
+}
+
+    .youthhome-quick-action-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 28px rgba(126, 111, 255, 0.25);
+        border-color: rgba(126, 111, 255, 0.4);
+    }
+
+.youthhome-announcement-card {
+    border-left: 4px solid #7e6fff;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+    .youthhome-announcement-card:hover {
+        transform: translateX(4px);
+        box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+    }
+
+.youthhome-program-carousel-container {
+    position: relative;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 16px 0;
+    width: 100%;
+    cursor: grab;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(126, 111, 255, 0.3) transparent;
+}
+
+    .youthhome-program-carousel-container::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .youthhome-program-carousel-container::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .youthhome-program-carousel-container::-webkit-scrollbar-thumb {
+        background: rgba(126, 111, 255, 0.3);
+        border-radius: 4px;
+    }
+
+        .youthhome-program-carousel-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(126, 111, 255, 0.5);
+        }
+
+    .youthhome-program-carousel-container:active {
+        cursor: grabbing;
+    }
+
+.youthhome-program-carousel {
+    display: flex;
+    gap: 16px;
+    animation: scroll-seamless 60s linear infinite;
+    will-change: transform;
+}
+
+.youthhome-program-carousel-container:hover .youthhome-program-carousel {
+    animation-play-state: paused;
+}
+
+.youthhome-program-card {
+    border-left: 4px solid #7e6fff;
+    min-width: 320px;
+    max-width: 320px;
+    width: 320px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+    flex-grow: 0;
+}
+
+    .youthhome-program-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+    }
+
+/* Seamless infinite scroll - works by duplicating content and looping at exactly 50% */
+@keyframes scroll-seamless {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(calc(-336px * var(--program-count, 4)));
+    }
+}
+
+.youthhome-event-card-clickable {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+    .youthhome-event-card-clickable:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+    }
+
+.youthhome-news-card-clickable {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+    .youthhome-news-card-clickable:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+    }
+
+.youthhome-section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 600px) {
+    .youthhome-welcome-banner {
+        padding: 20px 16px;
+        margin-bottom: 24px;
+    }
+
+        .youthhome-welcome-banner .mud-typography-h4 {
+            font-size: 1.25rem !important;
+        }
+
+        .youthhome-welcome-banner .mud-typography-body1 {
+            font-size: 0.875rem !important;
+        }
+
+    .youthhome-quick-action-card {
+        padding: 16px !important;
+    }
+
+        .youthhome-quick-action-card .mud-icon-root {
+            width: 28px !important;
+            height: 28px !important;
+            margin-bottom: 8px !important;
+        }
+
+        .youthhome-quick-action-card .mud-typography-h6 {
+            font-size: 0.90rem !important;
+            margin-bottom: 2px !important;
+        }
+
+        .youthhome-quick-action-card .mud-typography-body2 {
+            font-size: 0.75rem !important;
+        }
+
+    .youthhome-section-title {
+        font-size: 1.5rem;
+    }
+
+    .youthhome-program-card {
+        min-width: 280px;
+        max-width: 280px;
+        width: 280px;
+    }
+
+    @keyframes scroll-seamless {
+        0% {
+            transform: translateX(0);
+        }
+
+        100% {
+            transform: translateX(calc(-296px * var(--program-count, 4)));
+        }
+    }
+}

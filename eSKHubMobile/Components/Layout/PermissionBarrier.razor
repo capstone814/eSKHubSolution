@@ -1,0 +1,239 @@
+﻿@using eSKHubMobile.Services
+@inject IAppNotificationService NotifService
+@inject NavigationManager Navigation
+
+@if (_isVisible)
+{
+    <div class="permission-overlay">
+        <div class="permission-card">
+            <div class="card-glow"></div>
+            <div class="card-content">
+                <div class="icon-orb">
+                    <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    <div class="orb-ring"></div>
+                </div>
+
+                <h2>Enable Notifications</h2>
+                <p>Stay updated with the latest council news and ensure your data syncs perfectly in the background. eSKHub works best when notifications are allowed.</p>
+
+                <div class="action-stack">
+                    <button class="btn-premium primary" @onclick="HandleOpenSettings">
+                        <span>Open Device Settings</span>
+                        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    </button>
+                    <button class="btn-premium secondary" @onclick="HandleDismiss">
+                        Maybe Later
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .permission-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 24px;
+        animation: fadeIn 0.4s ease-out;
+    }
+
+    .permission-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 32px;
+        width: 100%;
+        max-width: 360px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .card-glow {
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle at center, rgba(126, 111, 255, 0.1) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .card-content {
+        padding: 40px 24px;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .icon-orb {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #7e6fff 0%, #764ba2 100%);
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        color: white;
+        position: relative;
+        box-shadow: 0 12px 24px rgba(126, 111, 255, 0.3);
+    }
+
+        .icon-orb svg {
+            width: 36px;
+            height: 36px;
+        }
+
+    .orb-ring {
+        position: absolute;
+        top: -4px;
+        left: -4px;
+        right: -4px;
+        bottom: -4px;
+        border: 2px solid #7e6fff;
+        border-radius: 28px;
+        opacity: 0.3;
+        animation: pulse 2s infinite;
+    }
+
+    .permission-card h2 {
+        font-size: 24px;
+        font-weight: 800;
+        color: #2d3436;
+        margin-bottom: 12px;
+        letter-spacing: -0.5px;
+    }
+
+    .permission-card p {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #636e72;
+        margin-bottom: 32px;
+    }
+
+    .action-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .btn-premium {
+        border: none;
+        padding: 16px 24px;
+        border-radius: 16px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+    }
+
+        .btn-premium.primary {
+            background: linear-gradient(135deg, #7e6fff 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 20px rgba(126, 111, 255, 0.25);
+        }
+
+            .btn-premium.primary:active {
+                transform: scale(0.96);
+            }
+
+            .btn-premium.primary svg {
+                width: 18px;
+                height: 18px;
+            }
+
+        .btn-premium.secondary {
+            background: transparent;
+            color: #b2bec3;
+        }
+
+            .btn-premium.secondary:active {
+                color: #636e72;
+            }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(1.1);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 0.3;
+        }
+
+        50% {
+            transform: scale(1.1);
+            opacity: 0.1;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 0.3;
+        }
+    }
+</style>
+
+@code {
+    private bool _isVisible = false;
+    private bool _hasCheckedStatus = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_hasCheckedStatus)
+        {
+            await CheckStatus();
+        }
+    }
+
+    private async Task CheckStatus()
+    {
+        _hasCheckedStatus = true;
+        bool enabled = await NotifService.AreNotificationsEnabledAsync();
+
+        if (!enabled)
+        {
+            _isVisible = true;
+            StateHasChanged();
+        }
+    }
+
+    private void HandleOpenSettings()
+    {
+        NotifService.OpenAppSettings();
+        // Keep visible so when they come back it's still there if they didn't enable
+        // But we'll hide it for now to avoid confusion if they just want to try again
+        _isVisible = false;
+        _hasCheckedStatus = false; // Reset so it checks again when they return
+        StateHasChanged();
+    }
+
+    private void HandleDismiss()
+    {
+        _isVisible = false;
+        StateHasChanged();
+    }
+}

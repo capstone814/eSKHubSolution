@@ -1,0 +1,983 @@
+﻿@page "/"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Pages.Dialogs
+@inject IDialogService DialogService
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ThemeService ThemeService
+@inject NavigationManager NavigationManager
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@implements IDisposable
+
+<PageTitle>eSKHub Bacacay</PageTitle>
+
+<style>
+    .mud-main-content {
+        padding-top: 0 !important;
+    }
+</style>
+
+<div class="public-home-page">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <!-- Header with Background Image -->
+        <div class="header-with-image">
+            <div class="header-overlay">
+                <div class="header-content">
+                    <div class="header-logos">
+                        <img src="/website/SKBACACAYLOGO.png" alt="SK Logo" class="@(ThemeService.IsDarkMode ? "header-logo-img-dark" : "header-logo-img-light")" />
+                        <div class="@(ThemeService.IsDarkMode ? "header-text-dark" : "header-text-light")">
+                            <MudText Typo="Typo.h2">SANGGUNIANG KABATAAN</MudText>
+                            <MudText Typo="Typo.h4">OF</MudText>
+                            <MudText Typo="Typo.h2">BACACAY, ALBAY</MudText>
+                        </div>
+                        <img src="/website/LGUBACACAYLOGO.png" alt="Bacacay Logo" class="@(ThemeService.IsDarkMode ? "header-logo-img-dark" : "header-logo-img-light")" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hero Banner -->
+        <div class="hero-banner" id="announcements">
+            <div class="hero-content">
+                @if (_latestAnnouncement != null)
+                {
+                    <div class="hero-badge">🎉 Latest Announcement</div>
+                    <h1 class="hero-title">@_latestAnnouncement.Subject</h1>
+                    <p class="hero-description">@_latestAnnouncement.ShortDescription</p>
+                    <div class="hero-buttons">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Surface"
+                                   Size="Size.Large"
+                                   Style="color: #ffffff; font-weight: 600; background-color: #667eea;"
+                                   Href="/announcements?autoselect=true">
+                            Learn More
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Size="Size.Large"
+                                   Style="color: white; border-color: rgba(255,255,255,0.5); font-weight: 600;"
+                                   Href="/announcements">
+                            View All Updates
+                        </MudButton>
+                    </div>
+                }
+                else
+                {
+                    <div class="hero-badge">🎉 Welcome</div>
+                    <h1 class="hero-title">No Announcements Available</h1>
+                    <p class="hero-description">Check back soon for the latest updates from your Sangguniang Kabataan Chapter.</p>
+                    <div class="hero-buttons">
+                        <MudButton Variant="Variant.Outlined"
+                                   Size="Size.Large"
+                                   Style="color: white; border-color: rgba(255,255,255,0.5); font-weight: 600;"
+                                   Href="/announcements">
+                            View All Updates
+                        </MudButton>
+                    </div>
+                }
+            </div>
+            <div class="hero-gradient-overlay"></div>
+        </div>
+
+        <!-- Quick Actions -->
+        <MudGrid Class="section-spacing">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h4" Class="section-title">Quick Actions</MudText>
+                <MudText Class="section-description">Get started with these common tasks</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="quick-action-card pa-6"
+                          Elevation="2"
+                          Style="cursor: pointer;"
+                          @onclick="OpenSubmitFeedbackDialog">
+                    <MudIcon Icon="@Icons.Material.Filled.Feedback" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Submit Feedback</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Share your ideas</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="quick-action-card pa-6"
+                          Elevation="2"
+                          Style="cursor: pointer;"
+                          @onclick="OpenYouthRegistrationDialog">
+                    <MudIcon Icon="@Icons.Material.Filled.HowToReg" Color="Color.Secondary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Youth Registration</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Join our database</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="quick-action-card pa-6"
+                          Elevation="2"
+                          Style="cursor: pointer;"
+                          @onclick="@(() => NavigationManager.NavigateTo("/events"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Success" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Events Calendar</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Upcoming activities</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="quick-action-card pa-6" Elevation="2" Style="cursor: pointer;">
+                    <MudIcon Icon="@Icons.Material.Filled.Assessment" Color="Color.Warning" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Transparency Hub</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">View reports</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Programs & Projects -->
+        <MudGrid Class="section-spacing" id="programs">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h4" Class="section-title">Programs & Projects</MudText>
+                <MudText Class="section-description">Initiatives driving positive change in our community</MudText>
+                <div class="category-filters">
+                    <button class="filter-chip @(_selectedCategory == "All" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("All"))">
+                        All
+                    </button>
+
+                    <button class="filter-chip @(_selectedCategory == "Youth Development" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("Youth Development"))">
+                        Youth Dev
+                    </button>
+
+                    <button class="filter-chip @(_selectedCategory == "Environment" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("Environment"))">
+                        Environment
+                    </button>
+
+                    <button class="filter-chip @(_selectedCategory == "Sports" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("Sports"))">
+                        Sports
+                    </button>
+
+                    <button class="filter-chip @(_selectedCategory == "Employment" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("Employment"))">
+                        Employment
+                    </button>
+
+                    <button class="filter-chip @(_selectedCategory == "Health" ? "active" : "")"
+                            @onclick="@(() => FilterByCategory("Health"))">
+                        Health
+                    </button>
+                </div>
+            </MudItem>
+
+            @if (_filteredPrograms.Any())
+            {
+                @foreach (var program in _filteredPrograms.Take(4))
+                {
+                    var styles = GetCategoryStyles(program.Category);
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Class="program-card pa-4"
+                                  Elevation="2"
+                                  Style="@($"border-left-color: {styles.BorderColor};")">
+                            <span class="program-category"
+                                  style="@($"background: {styles.BackgroundColor}; color: {styles.TextColor};")">
+                                @program.Category
+                            </span>
+                            <MudText Typo="Typo.h6" Class="mb-2" Style="font-weight: 600;">
+                                @program.Title
+                            </MudText>
+                            <MudText Typo="Typo.body2"
+                                     Color="Color.Secondary"
+                                     Class="mb-3"
+                                     Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                @program.Description
+                            </MudText>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       EndIcon="@Icons.Material.Filled.ChevronRight"
+                                       OnClick="@(() => ViewProgramDetails(program.Id))">
+                                Learn More
+                            </MudButton>
+                        </MudPaper>
+                    </MudItem>
+                }
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-8" Elevation="0" Style="text-align: center;">
+                        <MudIcon Icon="@Icons.Material.Filled.Work"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                            No Programs Available
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @if (_selectedCategory != "All")
+                            {
+                                <text>No programs found in the @_selectedCategory category. Try selecting a different category.</text>
+                            }
+                            else
+                            {
+                                <text>Check back soon for upcoming programs and projects from your Sangguniang Kabataan.</text>
+                            }
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+            <MudItem xs="12" Style="margin-top: 16px;">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           EndIcon="@Icons.Material.Filled.ChevronRight"
+                           Href="/programs">
+                    View All Programs & Projects
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Statistics -->
+        <MudGrid Class="section-spacing">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h4" Class="section-title">Our Impact</MudText>
+                <MudText Class="section-description">Making a difference in our community</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="stats-card" Elevation="2">
+                    <div class="stats-number">@_totalYouthCount</div>
+                    <div class="stats-label">Registered Youth</div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="stats-card" Elevation="2">
+                    <div class="stats-number">@_totalProgramsCount</div>
+                    <div class="stats-label">Programs</div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="stats-card" Elevation="2">
+                    <div class="stats-number">@_totalEventsCount</div>
+                    <div class="stats-label">Events</div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="stats-card" Elevation="2">
+                    <div class="stats-number">@_activeVolunteersCount</div>
+                    <div class="stats-label">Active Volunteers</div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Upcoming Events -->
+        <MudGrid Class="section-spacing" id="events">
+            <MudItem xs="12">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <MudText Typo="Typo.h4" Class="section-title">Upcoming Events</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Style="color: #764ba2;" Size="Size.Large" />
+                </div>
+            </MudItem>
+            @if (_upcomingEvents.Any())
+            {
+                @foreach (var evt in _upcomingEvents.Take(3))
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudPaper Elevation="2" Class="pa-4" Style="border-radius: 16px; height: 100%;">
+                            <div style="display: flex; gap: 16px; align-items: start;">
+                                <div class="event-date-box">
+                                    <div class="event-date-month">@evt.EventDate.ToString("MMM")</div>
+                                    <div class="event-date-day">@evt.EventDate.Day</div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 4px;">@evt.Title</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="@GetEventTypeColor(evt.EventType)">@evt.EventType</MudChip>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+                }
+            }
+            else
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-8" Elevation="0" Style="text-align: center;">
+                        <MudIcon Icon="@Icons.Material.Filled.Event"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                            No Upcoming Events
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Check back soon for upcoming events and activities from your Sangguniang Kabataan.
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+            <MudItem xs="12">
+                <MudButton Variant="Variant.Outlined"
+                           style="color: #764ba2;border-color:#764ba2;"
+                           FullWidth="true"
+                           Href="/events">
+                    View Full Calendar
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Latest News & Updates -->
+        <MudGrid Class="section-spacing" id="news">
+            <MudItem xs="12">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <MudText Typo="Typo.h4" Class="section-title">What's New</MudText>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Primary"
+                               EndIcon="@Icons.Material.Filled.ChevronRight"
+                               Href="/news"
+                               Style="display: none;"
+                               Class="view-all-news-btn">
+                        View All News
+                    </MudButton>
+                </div>
+            </MudItem>
+
+            @if (_latestNews != null)
+            {
+                <!-- Featured News Card -->
+                <MudItem xs="12">
+                    <MudPaper Class="news-card-featured pa-6"
+                              Elevation="0">
+                        <MudChip T="string"
+                                 Color="@GetNewsTypeChipColor(_latestNews.NewsType)"
+                                 Size="Size.Small"
+                                 Style="background: rgba(255,255,255,0.2); color: white;">
+                            @_latestNews.NewsType
+                        </MudChip>
+                        <MudText Typo="Typo.body2" Style="color: white; opacity: 0.9; margin-top: 8px;">
+                            @GetTimeAgo(_latestNews.DateCreated)
+                        </MudText>
+                        <MudText Typo="Typo.h5" Style="color: white; font-weight: 600; margin: 16px 0;">
+                            @_latestNews.Title
+                        </MudText>
+                        <MudText Typo="Typo.body1" Style="color: white; opacity: 0.95; margin-bottom: 16px;">
+                            @_latestNews.Summary
+                        </MudText>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <MudButton Variant="Variant.Text"
+                                       Style="color: white;"
+                                       EndIcon="@Icons.Material.Filled.ChevronRight"
+                                       OnClick="@(() => NavigateToNews(_latestNews.Id))">
+                                Read Full Article
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Style="color: white; border-color: rgba(255,255,255,0.5);"
+                                       Href="/news">
+                                View All News
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+
+                @if (_secondNews != null)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="news-card-small pa-4"
+                                  Elevation="1"
+                                  Style="cursor: pointer; height: 100%;"
+                                  @onclick="@(() => NavigateToNews(_secondNews.Id))">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @GetTimeAgo(_secondNews.DateCreated)
+                            </MudText>
+                            <MudText Typo="Typo.h6" Style="font-weight: 600; margin: 8px 0;">
+                                @_secondNews.Title
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @_secondNews.Summary
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+
+                @if (_thirdNews != null)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudPaper Class="news-card-small pa-4"
+                                  Elevation="1"
+                                  Style="cursor: pointer; height: 100%;"
+                                  @onclick="@(() => NavigateToNews(_thirdNews.Id))">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @GetTimeAgo(_thirdNews.DateCreated)
+                            </MudText>
+                            <MudText Typo="Typo.h6" Style="font-weight: 600; margin: 8px 0;">
+                                @_thirdNews.Title
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @_thirdNews.Summary
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                }
+            }
+            else
+            {
+                <!-- Empty State -->
+                <MudItem xs="12">
+                    <MudPaper Class="pa-8" Elevation="0" Style="text-align: center; background: var(--mud-palette-surface);">
+                        <MudIcon Icon="@Icons.Material.Filled.Article"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; opacity: 0.3; margin-bottom: 16px;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                            No News Articles Yet
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="margin-bottom: 24px;">
+                            Check back soon for the latest updates and stories from your Sangguniang Kabataan Bacacay Chapter.
+                        </MudText>
+                        <MudButton Variant="Variant.Outlined"
+                                   Style="border: 1px solid #667eea; color: #667eea;"
+                                   Href="/news">
+                            Go to News Page
+                        </MudButton>
+
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+
+        <!-- Transparency & Accountability Section -->
+        <div class="transparency-section" id="transparency">
+            <div style="position: relative; z-index: 10;">
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 24px;">
+                    <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Large" />
+                    <MudText Typo="Typo.h4" Class="section-title">Transparency & Accountability</MudText>
+                </div>
+                <MudText Typo="Typo.h6" Style="opacity: 0.9; margin-bottom: 32px; max-width: 700px;">
+                    Access detailed reports on budget utilization, resolutions, procurement processes, and performance metrics.
+                </MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="3">
+                        <div class="transparency-card" style="cursor: pointer;" @onclick="@(() => NavigateToTransparency("Budget"))">
+                            <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Large" Class="card-icon" />
+                            <div>
+                                <MudText Typo="Typo.h6" Class="title">Budget Reports</MudText>
+                                <MudText Typo="Typo.body2" Class="desc">Fund allocation & spending</MudText>
+                                @if (_budgetDocsCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Style="margin-top: 8px;">
+                                        @_budgetDocsCount documents
+                                    </MudChip>
+                                }
+                            </div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <div class="transparency-card" style="cursor: pointer;" @onclick="@(() => NavigateToTransparency("Resolution"))">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Large" Class="card-icon" />
+                            <div>
+                                <MudText Typo="Typo.h6" Class="title">Resolutions</MudText>
+                                <MudText Typo="Typo.body2" Class="desc">Passed ordinances archive</MudText>
+                                @if (_resolutionDocsCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Style="margin-top: 8px;">
+                                        @_resolutionDocsCount documents
+                                    </MudChip>
+                                }
+                            </div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <div class="transparency-card" style="cursor: pointer;" @onclick="@(() => NavigateToTransparency("Performance"))">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Class="card-icon" />
+                            <div>
+                                <MudText Typo="Typo.h6" Class="title">Performance</MudText>
+                                <MudText Typo="Typo.body2" Class="desc">SK scorecard metrics</MudText>
+                                @if (_performanceDocsCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Style="margin-top: 8px;">
+                                        @_performanceDocsCount documents
+                                    </MudChip>
+                                }
+                            </div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <div class="transparency-card" style="cursor: pointer;" @onclick="@(() => NavigateToTransparency("Procurement"))">
+                            <MudIcon Icon="@Icons.Material.Filled.Gavel" Size="Size.Large" Class="card-icon" />
+                            <div>
+                                <MudText Typo="Typo.h6" Class="title">Procurement</MudText>
+                                <MudText Typo="Typo.body2" Class="desc">Bidding notices</MudText>
+                                @if (_procurementDocsCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Style="margin-top: 8px;">
+                                        @_procurementDocsCount documents
+                                    </MudChip>
+                                }
+                            </div>
+                        </div>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </div>
+
+        <!-- Get Involved -->
+        <MudGrid Class="section-spacing" id="get-involved">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h4" Class="section-title" Align="Align.Center">Get Involved</MudText>
+                <MudText Class="section-description" Align="Align.Center" Style="max-width: 600px; margin: 0 auto 32px;">Your voice matters. Join us in shaping the future of our community through active participation.</MudText>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <div class="engagement-card engagement-card-blue">
+                    <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight: 600;">Share Your Ideas</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.9;">Submit project suggestions and feedback to help improve our programs.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Surface" FullWidth="true" Style="color: #ffffff; font-weight: 600; background-color: #2b6cb0" OnClick="OpenSubmitFeedbackDialog">Submit Feedback</MudButton>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <div class="engagement-card engagement-card-purple">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight: 600;">Join Our Database</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.9;">Register as a youth member to receive updates and participate in programs.</MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Surface"
+                               FullWidth="true"
+                               Style="color: #ffffff; font-weight: 600; background-color: #6b46c1;"
+                               OnClick="OpenYouthRegistrationDialog">
+                        Register Now
+                    </MudButton>
+                </div>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <div class="engagement-card engagement-card-pink" style="position: relative;">
+                    @if (_hasActivePolls)
+                    {
+                        <MudBadge Content="@_activePollCount"
+                                  Color="Color.Error"
+                                  Overlap="true"
+                                  Style="position: absolute; top: 16px; right: 16px;">
+                        </MudBadge>
+                    }
+                    <MudIcon Icon="@Icons.Material.Filled.HowToVote" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h5" Class="mb-2" Style="font-weight: 600;">Vote on Priorities</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4" Style="opacity: 0.9;">Participate in polls and surveys to help us prioritize community programs.</MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Surface"
+                               FullWidth="true"
+                               Style="color: #ffffff; font-weight: 600; background-color: #b83280;"
+                               OnClick="OpenTakeSurveyDialog">
+                        Take Survey
+                    </MudButton>
+                </div>
+            </MudItem>
+        </MudGrid>
+    </MudContainer>
+
+    <MudDivider Class="my-8" Style="border-color: var(--mud-palette-secondary); border-width: 1px;" />
+
+    <!-- Footer -->
+    <MudPaper Elevation="0" Class="pa-8 mt-12" Style="background: var(--mud-palette-drawer-background); border-top: 1px solid var(--mud-palette-divider);" id="contact">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                        <div class="sk-logo">
+                            <img src="website/eskhublogo.png" style="width: 46px; height: 46px; padding: 0; margin: 0;" />
+                        </div>
+                        <MudText Typo="Typo.h6" Style="font-weight: 700;">eSKHub Bacacay</MudText>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Empowering youth, building a better tomorrow for our community.</MudText>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Quick Links</MudText>
+                    <MudStack Spacing="2">
+                        <MudLink Href="/programs" Color="Color.Secondary" Typo="Typo.body2">Programs</MudLink>
+                        <MudLink Href="/events" Color="Color.Secondary" Typo="Typo.body2">Events</MudLink>
+                        <MudLink Href="/announcements" Color="Color.Secondary" Typo="Typo.body2">Announcements</MudLink>
+                        <MudLink Href="/news" Color="Color.Secondary" Typo="Typo.body2">News Articles</MudLink>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Resources</MudText>
+                    <MudStack Spacing="2">
+                        <MudLink Href="/transparency?category=Budget" Color="Color.Secondary" Typo="Typo.body2">Budget Reports</MudLink>
+                        <MudLink Href="/transparency?category=Resolution" Color="Color.Secondary" Typo="Typo.body2">Resolutions</MudLink>
+                        <MudLink Href="/contact-us" Color="Color.Secondary" Typo="Typo.body2">Contact Us</MudLink>
+                        <MudLink Href="/privacy-policy" Color="Color.Secondary" Typo="Typo.body2">Privacy Policy</MudLink>
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 700;">Connect With Us</MudText>
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook" Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Style="border-radius: 8px;" Href="https://www.facebook.com/share/166ph6VzHv/" Target="_blank" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.Instagram" Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Style="border-radius: 8px;" />
+                        <MudIconButton Icon="@Icons.Custom.Brands.YouTube" Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Style="border-radius: 8px;" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Subscribe to our RSS feed for the latest updates</MudText>
+                </MudItem>
+            </MudGrid>
+            <MudDivider Class="my-6" Style="border-color: var(--mud-palette-secondary); border-width: 1px;" />
+            <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary">© @DateTime.Now.Year eSKHub Bacacay. All rights reserved. | Built with transparency and accountability</MudText>
+        </MudContainer>
+    </MudPaper>
+</div>
+@code {
+    private Announcement? _latestAnnouncement;
+    private NewsArticle? _latestNews;
+    private NewsArticle? _secondNews;
+    private NewsArticle? _thirdNews;
+
+    private List<ProgramProject> _allPrograms = new();
+    private List<ProgramProject> _filteredPrograms = new();
+    private string _selectedCategory = "All";
+
+    private List<Event> _upcomingEvents = new();
+
+    private int _totalProgramsCount = 0;
+    private int _totalYouthCount = 0;
+    private int _totalEventsCount = 0;
+    private int _activeVolunteersCount = 0;
+
+    private bool _hasActivePolls = false;
+    private int _activePollCount = 0;
+    private HashSet<int> _votedPollIds = new();
+
+    private int _budgetDocsCount = 0;
+    private int _resolutionDocsCount = 0;
+    private int _performanceDocsCount = 0;
+    private int _procurementDocsCount = 0;
+
+    private async Task LoadTransparencyDocumentCounts()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            _budgetDocsCount = await db.TransparencyDocuments
+                .Where(t => t.IsPublished && t.Category == "Budget")
+                .CountAsync();
+
+            _resolutionDocsCount = await db.TransparencyDocuments
+                .Where(t => t.IsPublished && t.Category == "Resolution")
+                .CountAsync();
+
+            _performanceDocsCount = await db.TransparencyDocuments
+                .Where(t => t.IsPublished && t.Category == "Performance")
+                .CountAsync();
+
+            _procurementDocsCount = await db.TransparencyDocuments
+                .Where(t => t.IsPublished && t.Category == "Procurement")
+                .CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading transparency document counts: {ex.Message}");
+        }
+    }
+
+    private void NavigateToTransparency(string category)
+    {
+        NavigationManager.NavigateTo($"/transparency?category={category}");
+    }
+
+    private async Task ViewTransparencyDocuments(string category)
+    {
+        var parameters = new DialogParameters
+    {
+        { "Category", category }
+    };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Large,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<ViewTransparencyDocumentsDialog>(
+            $"{category} Documents",
+            parameters,
+            options
+        );
+    }
+
+    private async Task LoadStatistics()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // Count total registered youth
+            _totalYouthCount = await db.Youths
+                .Where(y => y.Status == "Active")
+                .CountAsync();
+
+            // Count total events
+            _totalEventsCount = await db.Events
+                .Where(e => e.IsPublished)
+                .CountAsync();
+
+            // Count active volunteers (youth willing to volunteer)
+            _activeVolunteersCount = await db.Youths
+                .Where(y => y.Status == "Active" && y.WillingToVolunteer)
+                .CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading statistics: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLatestAnnouncement();
+        await LoadLatestNews();
+        await LoadPrograms();
+        await LoadUpcomingEvents();
+        await LoadProgramsCount();
+        await LoadStatistics();
+        await LoadVotedPolls();
+        await CheckForActivePolls();
+        await LoadTransparencyDocumentCounts();
+        ThemeService.OnThemeChanged += StateHasChanged;
+    }
+
+
+    private async Task LoadVotedPolls()
+    {
+        try
+        {
+            var votedPolls = await SessionStorage.GetItemAsync<List<int>>("voted_polls_public");
+            if (votedPolls != null)
+            {
+                _votedPollIds = new HashSet<int>(votedPolls);
+            }
+        }
+        catch
+        {
+            _votedPollIds = new HashSet<int>();
+        }
+    }
+
+    private async Task CheckForActivePolls()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var activePolls = await db.Polls
+                .Where(p => p.IsActive &&
+                           (!p.DateExpires.HasValue || p.DateExpires.Value > DateTime.Now) &&
+                           p.Audience == "Public")
+                .Select(p => p.Id)
+                .ToListAsync();
+
+            // ✅ Filter out already voted polls
+            var unansweredPolls = activePolls.Where(id => !_votedPollIds.Contains(id)).ToList();
+
+            _activePollCount = unansweredPolls.Count;
+            _hasActivePolls = _activePollCount > 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking polls: {ex.Message}");
+        }
+    }
+
+    private async Task LoadLatestAnnouncement()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _latestAnnouncement = await db.Announcements
+                .Where(a => a.IsPublished && a.Audience == "Public")
+                .OrderByDescending(a => a.DateCreated)
+                .FirstOrDefaultAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading latest announcement: {ex.Message}");
+        }
+    }
+
+    private async Task LoadProgramsCount()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _totalProgramsCount = await db.ProgramsProjects
+                .Where(p => p.IsPublished && p.Status == "Approved")
+                .CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading programs count: {ex.Message}");
+        }
+    }
+
+    private async Task LoadLatestNews()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var newsArticles = await db.NewsArticles
+                .Where(n => n.IsPublished)
+                .OrderByDescending(n => n.DateCreated)
+                .Take(3)
+                .ToListAsync();
+
+            if (newsArticles.Any())
+            {
+                _latestNews = newsArticles.ElementAtOrDefault(0);
+                _secondNews = newsArticles.ElementAtOrDefault(1);
+                _thirdNews = newsArticles.ElementAtOrDefault(2);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading latest news: {ex.Message}");
+        }
+    }
+
+    private async Task LoadUpcomingEvents()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _upcomingEvents = await db.Events
+                .Where(e => e.IsPublished &&
+                           e.Audience == "Public" &&
+                           e.EventDate.Date >= DateTime.Today)
+                .OrderBy(e => e.EventDate)
+                .Take(3)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading upcoming events: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+
+    private Color GetEventTypeColor(string eventType) => eventType switch
+    {
+        "Meeting" => Color.Info,
+        "Sports" => Color.Success,
+        "Community" => Color.Primary,
+        "Workshop" => Color.Warning,
+        "Training" => Color.Error,
+        "Cultural" => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private Color GetNewsTypeChipColor(string newsType) => newsType switch
+    {
+        "Breaking" => Color.Error,
+        "Feature" => Color.Primary,
+        "Community" => Color.Success,
+        "Event" => Color.Info,
+        "Achievement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.Now - dateTime;
+
+        if (timeSpan.TotalMinutes < 1)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes} minute{((int)timeSpan.TotalMinutes != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours} hour{((int)timeSpan.TotalHours != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays} day{((int)timeSpan.TotalDays != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalDays < 30)
+            return $"{(int)(timeSpan.TotalDays / 7)} week{((int)(timeSpan.TotalDays / 7) != 1 ? "s" : "")} ago";
+        if (timeSpan.TotalDays < 365)
+            return $"{(int)(timeSpan.TotalDays / 30)} month{((int)(timeSpan.TotalDays / 30) != 1 ? "s" : "")} ago";
+
+        return $"{(int)(timeSpan.TotalDays / 365)} year{((int)(timeSpan.TotalDays / 365) != 1 ? "s" : "")} ago";
+    }
+
+    private void NavigateToNews(int newsId)
+    {
+        NavigationManager.NavigateTo($"/news?id={newsId}");
+    }
+
+    private async Task LoadPrograms()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _allPrograms = await db.ProgramsProjects
+                .Where(p => p.IsPublished && p.Status == "Approved" && p.Audience == "Public")
+                .OrderByDescending(p => p.DateCreated)
+                .Take(8)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _filteredPrograms = _allPrograms;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading programs: {ex.Message}");
+        }
+    }
+
+    private void FilterByCategory(string category)
+    {
+        _selectedCategory = category;
+
+        if (category == "All")
+        {
+            _filteredPrograms = _allPrograms;
+        }
+        else
+        {
+            _filteredPrograms = _allPrograms
+                .Where(p => p.Category == category)
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private (string BorderColor, string BackgroundColor, string TextColor) GetCategoryStyles(string category)
+    {
+        return category switch
+        {
+            "Youth Development" => ("#7e6fff", "rgba(126, 111, 255, 0.1)", "#7e6fff"),
+            "Environment" => ("#10b981", "rgba(16, 185, 129, 0.1)", "#10b981"),
+            "Sports" => ("#3b82f6", "rgba(59, 130, 246, 0.1)", "#3b82f6"),
+            "Employment" => ("#f59e0b", "rgba(245, 158, 11, 0.1)", "#f59e0b"),
+            "Health" => ("#ef4444", "rgba(239, 68, 68, 0.1)", "#ef4444"),
+            _ => ("#6b7280", "rgba(107, 114, 128, 0.1)", "#6b7280")
+        };
+    }
+    private async Task OpenYouthRegistrationDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<YouthRegistrationDialog>("Youth Registration", options);
+    }
+    private async Task OpenSubmitFeedbackDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<SubmitFeedbackDialog>("Submit Feedback", options);
+    }
+
+    private void ViewProgramDetails(int programId)
+    {
+        NavigationManager.NavigateTo($"/programs?id={programId}");
+    }
+    private async Task OpenTakeSurveyDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TakeSurveyDialog>("Community Polls", options);
+        var result = await dialog.Result;
+
+        // ✅ Refresh poll count after dialog closes with null-conditional operator
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadVotedPolls();
+            await CheckForActivePolls();
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,515 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Services
+@using System.Text.RegularExpressions
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IEmailService EmailService
+@implements IDisposable
+
+<style>
+    .feedback-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .section-header {
+        font-weight: 600;
+        color: var(--mud-palette-primary);
+        margin: 16px 0 8px 0;
+        padding-bottom: 4px;
+        border-bottom: 2px solid var(--mud-palette-primary);
+    }
+
+    .readonly-info {
+        background-color: rgba(126, 111, 255, 0.05);
+        border-left: 3px solid #7e6fff;
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 16px;
+    }
+
+    .otp-input input {
+        text-align: center !important;
+        font-size: 24px !important;
+        font-weight: 600;
+        letter-spacing: 0;
+    }
+</style>
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true" Class="feedback-dialog" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px; background-color: var(--mud-palette-drawer-background) !important;">
+    <TitleContent>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <MudIcon Icon="@Icons.Material.Filled.Feedback" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">SUBMIT FEEDBACK</MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            We value your feedback! Share your thoughts, suggestions, or concerns with us.
+        </MudText>
+
+        @if (_step == VerificationStep.InputEmail)
+        {
+            <MudForm @ref="_emailForm">
+                <MudText Typo="Typo.body2" Class="mb-4">
+                    Please provide your registered email address to verify your identity.
+                </MudText>
+                <MudTextField T="string"
+                              Label="Email Address"
+                              @bind-Value="_verificationEmail"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Validation="@(new Func<string, string?>(ValidateEmail))"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Disabled="_isProcessing"
+                              OnKeyDown="@(async (e) => { if (e.Key == "Enter") await CheckEmail(); })" />
+                @if (!string.IsNullOrEmpty(_verificationError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_verificationError</MudAlert>
+                }
+            </MudForm>
+        }
+        else if (_step == VerificationStep.VerifyOtp)
+        {
+            <MudForm @ref="_otpForm">
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    A 4-digit code has been sent to <strong>@MaskEmail(_verificationEmail)</strong>
+                </MudText>
+                <MudText Typo="Typo.body2" Class="mb-4" Color="Color.Primary">
+                    Please enter the code below:
+                </MudText>
+
+                <div class="d-flex justify-center gap-6 mb-4">
+                    @for (int i = 0; i < 4; i++)
+                    {
+                        int index = i;
+                        <MudTextField T="string"
+                                      @bind-Value="_otpDigits[index]"
+                                      MaxLength="1"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Class="otp-input"
+                                      InputStyle="width: 60px; font-size: 24px; text-align: center;"
+                                      OnKeyUp="@((KeyboardEventArgs e) => HandleOtpKeyUp(e, index))"
+                                      @ref="_otpInputs[index]"
+                                      Disabled="_isProcessing" />
+                    }
+                </div>
+
+                @if (_remainingSeconds > 0)
+                {
+                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-2" Color="@(_remainingSeconds <= 60 ? Color.Warning : Color.Info)">
+                        Code expires in: <strong>@FormatTime(_remainingSeconds)</strong>
+                    </MudText>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mb-2">
+                        Verification code has expired. Please request a new one.
+                    </MudAlert>
+                }
+
+                <MudText Typo="Typo.caption" Align="Align.Center" Color="Color.Secondary" Class="d-block">
+                    Didn't receive the code?
+                    <MudLink OnClick="ResendOtp" Color="Color.Primary" Disabled="@(_isProcessing || _remainingSeconds > 240)">
+                        Resend
+                    </MudLink>
+                </MudText>
+
+                @if (!string.IsNullOrEmpty(_verificationError))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_verificationError</MudAlert>
+                }
+            </MudForm>
+        }
+        else if (_step == VerificationStep.SubmitFeedback)
+        {
+            @if (_isYouth)
+            {
+                <div class="readonly-info">
+                    <MudText Typo="Typo.body2" Style="font-weight: 600; margin-bottom: 4px;">
+                        Submitted by:
+                    </MudText>
+                    <MudText Typo="Typo.body2">@_feedback.Name</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">@_feedback.Email</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Contact: @_feedback.ContactNumber</MudText>
+                </div>
+            }
+
+            <MudForm @ref="_form" Model="_feedback">
+                <MudGrid Spacing="2">
+                    @if (!_isYouth)
+                    {
+                        <MudItem xs="12">
+                            <MudTextField T="string"
+                                          Label="Your Name"
+                                          @bind-Value="_feedback.Name"
+                                          Required="true"
+                                          RequiredError="Name is required"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="7">
+                            <MudTextField T="string"
+                                          Label="Email Address"
+                                          @bind-Value="_feedback.Email"
+                                          Required="true"
+                                          RequiredError="Email is required"
+                                          Validation="@(new Func<string, string?>(ValidateEmail))"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="5">
+                            <MudTextField T="string"
+                                          Label="Contact Number (Optional)"
+                                          @bind-Value="_feedback.ContactNumber"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" />
+                        </MudItem>
+                    }
+
+                    <MudItem xs="12">
+                        <MudSelect T="string"
+                                   Label="Category"
+                                   @bind-Value="_feedback.Category"
+                                   Required="true"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            <MudSelectItem Value="@("General")">General Feedback</MudSelectItem>
+                            <MudSelectItem Value="@("Suggestion")">Suggestion</MudSelectItem>
+                            <MudSelectItem Value="@("Complaint")">Complaint</MudSelectItem>
+                            <MudSelectItem Value="@("Inquiry")">Inquiry</MudSelectItem>
+                            <MudSelectItem Value="@("Appreciation")">Appreciation</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField T="string"
+                                      Label="Subject"
+                                      @bind-Value="_feedback.Subject"
+                                      Required="true"
+                                      RequiredError="Subject is required"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField T="string"
+                                      Label="Message"
+                                      @bind-Value="_feedback.Message"
+                                      Required="true"
+                                      RequiredError="Message is required"
+                                      Variant="Variant.Outlined"
+                                      Lines="6"
+                                      Margin="Margin.Dense" />
+                    </MudItem>
+                </MudGrid>
+            </MudForm>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        @if (_step == VerificationStep.InputEmail)
+        {
+            <MudButton Color="Color.Primary" OnClick="CheckEmail" Disabled="_isProcessing">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Verify Email
+            </MudButton>
+        }
+        else if (_step == VerificationStep.VerifyOtp)
+        {
+            <MudButton Color="Color.Primary" OnClick="VerifyOtp" Disabled="@(_isProcessing || _remainingSeconds <= 0)">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Verify
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+                @if (_isSaving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Submitting...</span>
+                }
+                else
+                {
+                    <span>Submit Feedback</span>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private enum VerificationStep
+    {
+        InputEmail,
+        VerifyOtp,
+        SubmitFeedback
+    }
+
+    private VerificationStep _step = VerificationStep.InputEmail;
+    private MudForm _form = default!;
+    private MudForm _emailForm = default!;
+    private MudForm _otpForm = default!;
+
+    private bool _isSaving = false;
+    private bool _isProcessing = false;
+    private bool _isYouth = false;
+    private Feedback _feedback = new() { Category = "General" };
+
+    private string _verificationEmail = string.Empty;
+    private string _verificationError = string.Empty;
+    private string _generatedOtp = string.Empty;
+    private string[] _otpDigits = new string[4];
+    private MudTextField<string>[] _otpInputs = new MudTextField<string>[4];
+    private DateTime _otpGeneratedAt;
+    private int _remainingSeconds = 0;
+    private System.Threading.Timer? _countdownTimer;
+    private Youth? _registeredYouth;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string? YouthName { get; set; }
+    [Parameter] public string? YouthEmail { get; set; }
+    [Parameter] public string? YouthContact { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Check if this is a youth user (parameters are provided from youth portal)
+        _isYouth = !string.IsNullOrEmpty(YouthName);
+
+        if (_isYouth)
+        {
+            _feedback.Name = YouthName!;
+            _feedback.Email = YouthEmail ?? "";
+            _feedback.ContactNumber = YouthContact ?? "";
+            _step = VerificationStep.SubmitFeedback;
+        }
+    }
+
+    private string MaskEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email)) return string.Empty;
+        var parts = email.Split('@');
+        if (parts.Length != 2) return email;
+
+        var username = parts[0];
+        var domain = parts[1];
+
+        if (username.Length <= 2)
+            return $"{username}***@{domain}";
+
+        return $"{username.Substring(0, 2)}***@{domain}";
+    }
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address";
+
+        return null;
+    }
+
+    private async Task CheckEmail()
+    {
+        await _emailForm.Validate();
+        if (!_emailForm.IsValid) return;
+
+        _isProcessing = true;
+        _verificationError = string.Empty;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var emailLower = _verificationEmail.Trim().ToLower();
+
+            _registeredYouth = await db.Youths.FirstOrDefaultAsync(y => y.Email.ToLower() == emailLower && y.Status == "Active");
+
+            if (_registeredYouth == null)
+            {
+                _verificationError = "This email is not registered as a youth in our system. Only registered youth can submit feedback.";
+                _isProcessing = false;
+                return;
+            }
+
+            // Generate 4-digit OTP
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.Now;
+
+            // Send OTP
+            await EmailService.SendFeedbackOtpEmailAsync(_verificationEmail, _generatedOtp, _registeredYouth.FirstName);
+
+            _step = VerificationStep.VerifyOtp;
+            StartCountdown();
+            Snackbar.Add("Verification code sent to your email.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _verificationError = $"Error highlighting your account: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task ResendOtp()
+    {
+        if (_isProcessing) return;
+
+        _isProcessing = true;
+        _verificationError = string.Empty;
+        _otpDigits = new string[4];
+
+        try
+        {
+            var random = new Random();
+            _generatedOtp = random.Next(1000, 9999).ToString();
+            _otpGeneratedAt = DateTime.Now;
+
+            await EmailService.SendFeedbackOtpEmailAsync(_verificationEmail, _generatedOtp, _registeredYouth!.FirstName);
+
+            StartCountdown();
+            Snackbar.Add("Verification code resent.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _verificationError = $"Error resending code: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private void VerifyOtp()
+    {
+        _verificationError = string.Empty;
+        var enteredOtp = string.Join("", _otpDigits);
+
+        if (enteredOtp.Length != 4)
+        {
+            _verificationError = "Please enter the 4-digit code.";
+            return;
+        }
+
+        if (DateTime.Now - _otpGeneratedAt > TimeSpan.FromMinutes(5))
+        {
+            _verificationError = "Verification code has expired. Please resend.";
+            return;
+        }
+
+        if (enteredOtp == _generatedOtp)
+        {
+            _countdownTimer?.Dispose();
+            _isYouth = true;
+            _feedback.Name = _registeredYouth!.FullName;
+            _feedback.Email = _registeredYouth.Email;
+            _feedback.ContactNumber = _registeredYouth.ContactNumber;
+            _step = VerificationStep.SubmitFeedback;
+            Snackbar.Add("Identity verified successfully.", Severity.Success);
+        }
+        else
+        {
+            _verificationError = "Invalid verification code. Please try again.";
+            _otpDigits = new string[4];
+        }
+    }
+
+    private async Task HandleOtpKeyUp(KeyboardEventArgs e, int index)
+    {
+        if (!string.IsNullOrEmpty(_otpDigits[index]) && index < 3)
+        {
+            await _otpInputs[index + 1].FocusAsync();
+        }
+        else if (e.Key == "Backspace" && index > 0 && string.IsNullOrEmpty(_otpDigits[index]))
+        {
+            await _otpInputs[index - 1].FocusAsync();
+        }
+    }
+
+    private void StartCountdown()
+    {
+        _remainingSeconds = 300; // 5 minutes
+        _countdownTimer?.Dispose();
+        _countdownTimer = new System.Threading.Timer(_ =>
+        {
+            if (_remainingSeconds > 0)
+            {
+                _remainingSeconds--;
+                InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                _countdownTimer?.Dispose();
+            }
+        }, null, 1000, 1000);
+    }
+
+    private string FormatTime(int totalSeconds)
+    {
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes:D2}:{seconds:D2}";
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in all required fields", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            _feedback.Email = _feedback.Email.Trim().ToLower();
+            _feedback.DateSubmitted = DateTime.Now;
+            _feedback.IsRead = false;
+
+            db.Feedbacks.Add(_feedback);
+            await db.SaveChangesAsync();
+
+            Snackbar.Add("Thank you! Your feedback has been submitted successfully.", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error submitting feedback: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public void Dispose()
+    {
+        _countdownTimer?.Dispose();
+    }
+}

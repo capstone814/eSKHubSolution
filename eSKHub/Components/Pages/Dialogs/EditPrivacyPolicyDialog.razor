@@ -1,0 +1,634 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject UserStateService UserState
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <!-- Data Protection Officer Section -->
+            <MudText Typo="Typo.h6" Class="mb-3" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Security" Class="mr-2" />
+                Data Protection Officer
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="DPO Email"
+                                  @bind-Value="_dpoEmail"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="dpo@eskhub-bacacay.gov.ph"
+                                  Required="true"
+                                  RequiredError="DPO email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  MaxLength="100" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="DPO Phone"
+                                  @bind-Value="_dpoPhone"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="(052) 123-4567"
+                                  Required="true"
+                                  RequiredError="DPO phone is required"
+                                  Validation="@(new Func<string, string?>(ValidatePhone))"
+                                  MaxLength="20" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Organization Information Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Business" Class="mr-2" />
+                Organization Information
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Organization Name"
+                                  @bind-Value="_orgName"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="SK Federation Bacacay"
+                                  Required="true"
+                                  RequiredError="Organization name is required"
+                                  MaxLength="200" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Organization Address"
+                                  @bind-Value="_orgAddress"
+                                  Lines="3"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="Municipal Hall of Bacacay, Bacacay, Albay 4510"
+                                  Required="true"
+                                  RequiredError="Organization address is required"
+                                  Validation="@(new Func<string, string?>(ValidateAddress))"
+                                  MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12" sm="6" hidden>
+                    <MudTextField T="string"
+                                  Label="Contact Email"
+                                  @bind-Value="_contactEmail"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="info@eskhub-bacacay.gov.ph"
+                                  Required="true"
+                                  RequiredError="Contact email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  MaxLength="100" />
+                </MudItem>
+                <MudItem xs="12" sm="6" hidden>
+                    <MudTextField T="string"
+                                  Label="Contact Phone"
+                                  @bind-Value="_contactPhone"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="(052) 123-4567"
+                                  Required="true"
+                                  RequiredError="Contact phone is required"
+                                  Validation="@(new Func<string, string?>(ValidatePhone))"
+                                  MaxLength="20" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Last Updated Date -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Class="mr-2" />
+                Policy Information
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudDatePicker Label="Last Updated Date"
+                           @bind-Date="_lastUpdatedDate"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Required="true"
+                           RequiredError="Last updated date is required"
+                           MaxDate="DateTime.Today" />
+
+            <!-- Introduction Section -->
+            <MudText Typo="Typo.h6" Class="mb-3" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" />
+                Introduction
+                <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye"
+                               Color="Color.Info"
+                               Size="Size.Small"
+                               OnClick="RequestDeveloperAccess"
+                               Disabled="@_isSendingPin"
+                               Style="margin-left: 8px;" />
+            </MudText>
+            @if (!_isDeveloperUnlocked)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    Contact developer to enable privacy policies editing.
+                </MudAlert>
+            }
+            @if (_showDeveloperPinInput)
+            {
+                <MudTextField T="string"
+                              Label="Developer PIN"
+                              @bind-Value="_enteredPin"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="Enter 4-digit PIN"
+                              MaxLength="4"
+                              Class="mb-3"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              OnAdornmentClick="VerifyDeveloperPin" />
+            }
+
+            <MudTextField T="string"
+                          Label="Introduction Text"
+                          @bind-Value="_introductionText"
+                          Variant="Variant.Outlined"
+                          Lines="6"
+                          Margin="Margin.Dense"
+                          HelperText="Enter each paragraph on a new line"
+                          Required="true"
+                          RequiredError="Introduction text is required"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Information We Collect Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Collections" Class="mr-2" />
+                Information We Collect
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Personal Information Collected"
+                          @bind-Value="_personalInfoCollected"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Personal information section is required"
+                          MaxLength="3000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <MudTextField T="string"
+                          Label="Automatically Collected Information"
+                          @bind-Value="_autoCollectedInfo"
+                          Variant="Variant.Outlined"
+                          Lines="6"
+                          Margin="Margin.Dense"
+                          Class="mt-3"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Auto-collected information section is required"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- How We Use Your Information Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Security" Class="mr-2" />
+                How We Use Your Information
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="How We Use Your Information"
+                          @bind-Value="_howWeUseInfo"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="This section is required"
+                          MaxLength="3000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Information Sharing Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Share" Class="mr-2" />
+                Information Sharing and Disclosure
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Information Sharing Policy"
+                          @bind-Value="_infoSharing"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists. Include the 'IMPORTANT: We do NOT sell...' note"
+                          Required="true"
+                          RequiredError="Information sharing section is required"
+                          MaxLength="3000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Data Security Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Class="mr-2" />
+                Data Security
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Data Security Measures"
+                          @bind-Value="_dataSecurity"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Data security section is required"
+                          MaxLength="3000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Your Rights Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Class="mr-2" />
+                Your Rights and Choices
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="User Rights Under Data Privacy Act"
+                          @bind-Value="_userRights"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="User rights section is required"
+                          MaxLength="3000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Children's Privacy Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.ChildCare" Class="mr-2" />
+                Children's Privacy
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Children's Privacy Policy"
+                          @bind-Value="_childrenPrivacy"
+                          Variant="Variant.Outlined"
+                          Lines="6"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Children's privacy section is required"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Cookies and Tracking Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Cookie" Class="mr-2" />
+                Cookies and Tracking Technologies
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Cookies and Tracking Policy"
+                          @bind-Value="_cookiesTracking"
+                          Variant="Variant.Outlined"
+                          Lines="6"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Cookies section is required"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <!-- Changes to Policy Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Update" Class="mr-2" />
+                Changes to This Privacy Policy
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Policy Changes Information"
+                          @bind-Value="_policyChanges"
+                          Variant="Variant.Outlined"
+                          Lines="8"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="Policy changes section is required"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <MudAlert Severity="Severity.Info" Class="mt-4" Dense="true">
+                All changes will be reflected on the Privacy Policy page immediately after saving.
+            </MudAlert>
+
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PageContent? Content { get; set; }
+
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    private bool _isDeveloperUnlocked = false;
+    private bool _showDeveloperPinInput = false;
+    private bool _isSendingPin = false;
+    private string _generatedPin = string.Empty;
+    private string _enteredPin = string.Empty;
+
+    // Contact Information
+    private string _dpoEmail = "dpo@eskhub-bacacay.gov.ph";
+    private string _dpoPhone = "(052) 123-4567";
+    private string _orgName = "SK Federation Bacacay";
+    private string _orgAddress = "Municipal Hall of Bacacay, Bacacay, Albay 4510";
+    private string _contactEmail = "info@eskhub-bacacay.gov.ph";
+    private string _contactPhone = "(052) 123-4567";
+    private DateTime? _lastUpdatedDate = DateTime.Today;
+
+    // Content Sections
+    private string _introductionText = "Welcome to eSKHub Bacacay (\"we,\" \"our,\" or \"us\"). We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.\n\nBy accessing or using eSKHub Bacacay, you agree to the terms of this Privacy Policy. If you do not agree with our policies and practices, please do not use our services.";
+
+    private string _personalInfoCollected = "We may collect personal information that you voluntarily provide to us when you:\n• Register for youth programs or events\n• Submit feedback or contact us\n• Subscribe to our newsletter\n• Participate in surveys or polls\n• Apply for youth membership\n\nThis information may include:\n• Name and contact information (email, phone number, address)\n• Date of birth and age\n• Gender and civil status\n• Educational background\n• Skills and interests\n• Profile pictures or photos";
+
+    private string _autoCollectedInfo = "When you access our website, we may automatically collect certain information, including:\n• IP address and browser type\n• Operating system\n• Pages visited and time spent on pages\n• Referring website addresses\n• Device information";
+
+    private string _howWeUseInfo = "We use the information we collect for the following purposes:\n• Service Delivery: To provide, maintain, and improve our services\n• Communication: To send you updates, announcements, and program information\n• Program Management: To organize events, programs, and youth activities\n• Feedback Processing: To respond to your inquiries and address your concerns\n• Analytics: To understand how users interact with our platform\n• Legal Compliance: To comply with applicable laws and regulations\n• Safety & Security: To protect against fraud and ensure user safety";
+
+    private string _infoSharing = "We may share your information in the following circumstances:\n• With Your Consent: When you give us explicit permission\n• Government Agencies: As required by law or to comply with legal processes\n• Service Providers: With third-party vendors who assist in operating our platform\n• Partner Organizations: When necessary for program implementation\n• Public Information: Information you choose to make public (e.g., event participation)\n\nIMPORTANT: We do NOT sell your personal information. We will never sell, rent, or trade your personal information to third parties for marketing purposes.";
+
+    private string _dataSecurity = "We implement appropriate technical and organizational measures to protect your personal information, including:\n• Encryption of sensitive data\n• Secure server infrastructure\n• Regular security assessments\n• Access controls and authentication\n• Employee training on data protection\n\nHowever, no method of transmission over the internet is 100% secure. While we strive to protect your information, we cannot guarantee its absolute security.";
+
+    private string _userRights = "Under the Data Privacy Act of 2012 (Republic Act No. 10173), you have the following rights:\n• Right to Access: Request a copy of your personal information\n• Right to Correction: Request correction of inaccurate information\n• Right to Erasure: Request deletion of your personal information\n• Right to Object: Object to processing of your personal information\n• Right to Data Portability: Request transfer of your data to another service\n• Right to Withdraw Consent: Withdraw consent for data processing\n\nTo exercise these rights, please contact us at the email provided in the Contact Information section.";
+
+    private string _childrenPrivacy = "Our services are designed for youth aged 15-30. For users under 18 years old:\n• We require parental or guardian consent for certain activities\n• We take extra precautions to protect minors' information\n• We do not knowingly collect information from children under 13";
+
+    private string _cookiesTracking = "We use cookies and similar technologies to:\n• Remember your preferences and settings\n• Analyze website traffic and usage patterns\n• Improve user experience\n• Maintain session information\n\nYou can control cookie preferences through your browser settings.";
+
+    private string _policyChanges = "We may update this Privacy Policy from time to time. We will notify you of any changes by:\n• Posting the new Privacy Policy on this page\n• Updating the \"Last Updated\" date\n• Sending an email notification for significant changes\n\nWe encourage you to review this Privacy Policy periodically to stay informed about how we protect your information.";
+
+    #region Validation Methods
+
+    private async Task RequestDeveloperAccess()
+    {
+        _isSendingPin = true;
+        StateHasChanged();
+
+        try
+        {
+            var random = new Random();
+            _generatedPin = random.Next(1000, 9999).ToString();
+
+            var message = new MimeKit.MimeMessage();
+            message.From.Add(new MimeKit.MailboxAddress("eSKHub System", "eskhub770@gmail.com"));
+            message.To.Add(new MimeKit.MailboxAddress("Developer", "eskhub770@gmail.com"));
+            message.Subject = "Developer Access PIN - Privacy Policy Page";
+
+            var bodyBuilder = new MimeKit.BodyBuilder
+            {
+                HtmlBody = $@"
+                <div style='font-family: Arial, sans-serif; padding: 20px;'>
+                    <h2>Developer Access Request</h2>
+                    <p>A developer access request has been made for the Privacy Policy page.</p>
+                    <p>PIN Code:</p>
+                    <h1 style='color: #7e6fff; font-size: 36px; letter-spacing: 8px;'>{_generatedPin}</h1>
+                    <p>User: {UserState.Fullname}</p>
+                    <p>Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>
+                </div>
+            "
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new MailKit.Net.Smtp.SmtpClient();
+            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync("eskhub770@gmail.com", "qiyy pnpb tkzh ipue");
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _showDeveloperPinInput = true;
+            Snackbar.Add("PIN sent to developer email", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sending PIN: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSendingPin = false;
+            StateHasChanged();
+        }
+    }
+
+    private void VerifyDeveloperPin()
+    {
+        if (_enteredPin == _generatedPin)
+        {
+            _isDeveloperUnlocked = true;
+            _showDeveloperPinInput = false;
+            Snackbar.Add("Developer access granted", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Invalid PIN", Severity.Error);
+        }
+    }
+
+    private string? ValidateEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        if (!Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            return "Invalid email format";
+
+        return null;
+    }
+
+    private string? ValidatePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return "Phone number is required";
+
+        if (phone.Length < 7)
+            return "Phone number is too short";
+
+        if (!Regex.IsMatch(phone, @"^[\d\s\(\)\-\+]+$"))
+            return "Invalid phone number format";
+
+        return null;
+    }
+
+    private string? ValidateAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            return "Address is required";
+
+        if (address.Length < 10)
+            return "Address is too short (minimum 10 characters)";
+
+        return null;
+    }
+
+    #endregion
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+
+        if (Content != null)
+        {
+            LoadPrivacyPolicyData(Content.Content);
+        }
+    }
+
+    private void LoadPrivacyPolicyData(string jsonContent)
+    {
+        try
+        {
+            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonContent);
+            if (data != null)
+            {
+                // Contact Information
+                _dpoEmail = data.GetValueOrDefault("DpoEmail", _dpoEmail);
+                _dpoPhone = data.GetValueOrDefault("DpoPhone", _dpoPhone);
+                _orgName = data.GetValueOrDefault("OrgName", _orgName);
+                _orgAddress = data.GetValueOrDefault("OrgAddress", _orgAddress);
+                _contactEmail = data.GetValueOrDefault("ContactEmail", _contactEmail);
+                _contactPhone = data.GetValueOrDefault("ContactPhone", _contactPhone);
+
+                if (data.ContainsKey("LastUpdatedDate") && DateTime.TryParse(data["LastUpdatedDate"], out var date))
+                {
+                    _lastUpdatedDate = date;
+                }
+
+                // Content Sections
+                _introductionText = data.GetValueOrDefault("IntroductionText", _introductionText);
+                _personalInfoCollected = data.GetValueOrDefault("PersonalInfoCollected", _personalInfoCollected);
+                _autoCollectedInfo = data.GetValueOrDefault("AutoCollectedInfo", _autoCollectedInfo);
+                _howWeUseInfo = data.GetValueOrDefault("HowWeUseInfo", _howWeUseInfo);
+                _infoSharing = data.GetValueOrDefault("InfoSharing", _infoSharing);
+                _dataSecurity = data.GetValueOrDefault("DataSecurity", _dataSecurity);
+                _userRights = data.GetValueOrDefault("UserRights", _userRights);
+                _childrenPrivacy = data.GetValueOrDefault("ChildrenPrivacy", _childrenPrivacy);
+                _cookiesTracking = data.GetValueOrDefault("CookiesTracking", _cookiesTracking);
+                _policyChanges = data.GetValueOrDefault("PolicyChanges", _policyChanges);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading privacy policy data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fix validation errors before saving", Severity.Error);
+            return;
+        }
+
+        if (!_lastUpdatedDate.HasValue)
+        {
+            Snackbar.Add("Last updated date is required", Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var contentData = new Dictionary<string, string>
+            {
+                // Contact Information
+                { "DpoEmail", _dpoEmail.Trim() },
+                { "DpoPhone", _dpoPhone.Trim() },
+                { "OrgName", _orgName.Trim() },
+                { "OrgAddress", _orgAddress.Trim() },
+                { "ContactEmail", _contactEmail.Trim() },
+                { "ContactPhone", _contactPhone.Trim() },
+                { "LastUpdatedDate", _lastUpdatedDate.Value.ToString("yyyy-MM-dd") },
+
+                // Content Sections
+                { "IntroductionText", _introductionText.Trim() },
+                { "PersonalInfoCollected", _personalInfoCollected.Trim() },
+                { "AutoCollectedInfo", _autoCollectedInfo.Trim() },
+                { "HowWeUseInfo", _howWeUseInfo.Trim() },
+                { "InfoSharing", _infoSharing.Trim() },
+                { "DataSecurity", _dataSecurity.Trim() },
+                { "UserRights", _userRights.Trim() },
+                { "ChildrenPrivacy", _childrenPrivacy.Trim() },
+                { "CookiesTracking", _cookiesTracking.Trim() },
+                { "PolicyChanges", _policyChanges.Trim() }
+            };
+
+            var jsonContent = JsonSerializer.Serialize(contentData);
+
+            if (Content == null)
+            {
+                var newContent = new PageContent
+                {
+                    PageName = "PrivacyPolicy",
+                    Content = jsonContent,
+                    DateModified = DateTime.Now,
+                    ModifiedBy = UserState.Fullname
+                };
+                db.PageContents.Add(newContent);
+            }
+            else
+            {
+                var existingContent = await db.PageContents.FindAsync(Content.Id);
+                if (existingContent != null)
+                {
+                    existingContent.Content = jsonContent;
+                    existingContent.DateModified = DateTime.Now;
+                    existingContent.ModifiedBy = UserState.Fullname;
+                    db.PageContents.Update(existingContent);
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("Privacy policy information saved successfully", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving content: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

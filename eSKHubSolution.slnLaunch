@@ -1,0 +1,22 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "eSKHubMobile\\eSKHubMobile.csproj",
+        "Action": "Start",
+        "DebugTarget": "INFINIX X6531 (Android 14.0 - API 34)"
+      },
+      {
+        "Path": "eSKHub.API\\eSKHub.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "https"
+      },
+      {
+        "Path": "eSKHub\\eSKHub.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      }
+    ]
+  }
+]

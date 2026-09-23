@@ -1,0 +1,656 @@
+﻿@page "/surveys"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@using System.Text.Json
+@inject AuthService AuthService
+@inject OfflineDbService OfflineDb
+@inject OfflineSyncService SyncService
+@inject NavigationManager Navigation
+
+<div class="page-container">
+    <header class="page-header">
+        <button class="back-btn" @onclick='() => Navigation.NavigateTo("/home")'>
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <h1>Community Polls</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <div class="content-area">
+        @if (_isLoading)
+        {
+            <div class="shimmer-list">
+                <div class="shimmer-card"></div>
+                <div class="shimmer-card"></div>
+            </div>
+        }
+        else if (!_polls.Any())
+        {
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-2.094 3.42 3.42 0 004.438 0 3.42 3.42 0 001.946 2.094 3.42 3.42 0 002.094 1.946 3.42 3.42 0 000 4.438 3.42 3.42 0 00-2.094 1.946 3.42 3.42 0 00-1.946 2.094 3.42 3.42 0 00-4.438 0 3.42 3.42 0 00-1.946-2.094 3.42 3.42 0 00-2.094-1.946 3.42 3.42 0 000-4.438 3.42 3.42 0 002.094-1.946z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <p>No active polls at the moment.</p>
+            </div>
+        }
+        else
+        {
+            <div class="polls-list">
+                @foreach (var poll in _polls)
+                {
+                    var userVote = GetUserVote(poll);
+                    <div class="poll-card">
+                        <div class="poll-accent"></div>
+                        <div class="poll-content">
+                            <h3>@poll.Question</h3>
+
+                            @if (userVote == null && !HasUserVotedLegacy(poll))
+                            {
+                                <div class="options-container">
+                                    @{
+                                        var options = GetOptions(poll);
+                                        foreach (var option in options)
+                                        {
+                                            var currentOption = option;
+                                            <div class="poll-option @(_selectedOptions.ContainsKey(poll.RemoteId) && _selectedOptions[poll.RemoteId] == currentOption ? "selected" : "")"
+                                                 @onclick="@(() => SelectOption(poll.RemoteId, currentOption))">
+                                                <div class="radio-circle"></div>
+                                                <span>@currentOption</span>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+
+                                <button class="vote-btn"
+                                        @onclick="@(() => SubmitVote(poll))"
+                                        disabled="@(!_selectedOptions.ContainsKey(poll.RemoteId) || _isSubmitting)">
+                                    @if (_isSubmitting)
+                                    {
+                                        <span class="spinner"></span>
+                                        <span>Submitting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Submit Vote</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <div class="vote-status-row">
+                                    <div class="voted-badge">
+                                        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14" fill="none" stroke="currentColor" stroke-width="2" /><path d="M22 4L12 14.01l-3-3" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                        Voted
+                                    </div>
+                                    @if (userVote != null)
+                                    {
+                                        <div class="sync-badge @(userVote.IsSynced ? "synced" : "pending")">
+                                            <i class="fas @(userVote.IsSynced ? "fa-check-circle" : "fa-clock")"></i>
+                                            @(userVote.IsSynced ? "Synced" : "Offline")
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="results-container">
+                                    @{
+                                        var options = GetOptions(poll);
+                                        var totalVotes = GetTotalVotes(poll);
+                                        foreach (var option in options)
+                                        {
+                                            var currentOption = option;
+                                            var votes = GetVotes(poll, currentOption);
+                                            var percentage = totalVotes > 0 ? (votes * 100.0 / totalVotes) : 0;
+                                            var isUserChoice = IsUserChoice(poll, currentOption, userVote);
+
+                                            <div class="result-item @(isUserChoice ? "user-choice" : "")">
+                                                <div class="result-info">
+                                                    <span class="option-text">@currentOption @(isUserChoice ? " (Your Choice)" : "")</span>
+                                                    <span class="votes-count">@votes votes (@percentage.ToString("F1")%)</span>
+                                                </div>
+                                                <div class="progress-bg">
+                                                    <div class="progress-bar" style="width: @percentage%"></div>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                    <div class="total-votes">Total: @totalVotes votes</div>
+                                </div>
+                            }
+
+                            @if (poll.DateExpires.HasValue)
+                            {
+                                <div class="poll-expiry">Expires: @poll.DateExpires.Value.ToString("MMM dd, yyyy")</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .page-container {
+        background-color: #f8f9fe;
+        min-height: 100vh;
+        color: #2d3436;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    .page-header h1 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .header-spacer {
+        width: 40px;
+    }
+
+    .back-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+
+    .back-btn svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .content-area {
+        padding: 20px;
+    }
+
+    .polls-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .poll-card {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.06);
+        display: flex;
+        margin-bottom: 8px;
+    }
+
+    .poll-accent {
+        width: 6px;
+        background: #667eea;
+        flex-shrink: 0;
+    }
+
+    .poll-content {
+        padding: 20px;
+        flex: 1;
+    }
+
+    .poll-content h3 {
+        font-size: 16px;
+        font-weight: 800;
+        color: #2d3436;
+        margin: 0 0 16px;
+    }
+
+    .options-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .poll-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid #f0f2f5;
+        background: #fafbfc;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .poll-option.selected {
+        border-color: #667eea;
+        background: #f0f2ff;
+    }
+
+    .radio-circle {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #b2bec3;
+        border-radius: 50%;
+        position: relative;
+    }
+
+    .poll-option.selected .radio-circle {
+        border-color: #667eea;
+    }
+
+    .poll-option.selected .radio-circle::after {
+        content: '';
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: #667eea;
+        border-radius: 50%;
+        top: 2px;
+        left: 2px;
+    }
+
+    .poll-option span {
+        font-size: 13px;
+        font-weight: 600;
+        color: #2d3436;
+    }
+
+    .vote-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .vote-btn:disabled {
+        opacity: 0.5;
+    }
+
+    .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .vote-status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .voted-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .voted-badge svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .sync-badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .sync-badge.synced { color: #2e7d32; background: #e8f5e9; }
+    .sync-badge.pending { color: #f57c00; background: #fff8e1; }
+
+    .results-container {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .result-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px;
+        border-radius: 8px;
+        transition: background 0.3s;
+    }
+
+    .result-item.user-choice {
+        background: #f0f7ff;
+        border-left: 3px solid #667eea;
+    }
+
+    .result-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .option-text {
+        font-size: 12px;
+        font-weight: 600;
+        color: #2d3436;
+    }
+
+    .votes-count {
+        font-size: 10px;
+        font-weight: 700;
+        color: #636e72;
+    }
+
+    .progress-bg {
+        height: 8px;
+        background: #f0f2f5;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 4px;
+        transition: width 0.5s ease-out;
+    }
+
+    .total-votes {
+        font-size: 10px;
+        font-weight: 700;
+        color: #b2bec3;
+        text-align: right;
+        margin-top: 5px;
+    }
+
+    .poll-expiry {
+        font-size: 10px;
+        font-weight: 600;
+        color: #b2bec3;
+        margin-top: 15px;
+        border-top: 1px solid #f1f2f6;
+        padding-top: 10px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #b2bec3;
+    }
+
+    .empty-state svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        opacity: 0.3;
+    }
+
+    .shimmer-card {
+        height: 200px;
+        background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+        border-radius: 20px;
+        background-size: 200% 100%;
+        animation: shimmer 1.5s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    @@keyframes shimmer {
+        to { background-position-x: -200%; }
+    }
+</style>
+
+@code {
+    private List<OfflinePoll> _polls = new();
+    private List<OfflinePollAnswer> _userAnswers = new();
+    private Dictionary<int, string> _selectedOptions = new();
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        
+        // Try to sync any remaining offline votes in the background
+        _ = Task.Run(async () => {
+            await SyncService.UploadPendingDataAsync();
+            await SyncService.RefreshPollsAsync();
+            await MainThread.InvokeOnMainThreadAsync(LoadDataAsync);
+        });
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _polls = await OfflineDb.GetItemsAsync<OfflinePoll>();
+            _polls = _polls.Where(p => p.IsActive && (!p.DateExpires.HasValue || p.DateExpires.Value > DateTime.Now))
+                         .OrderByDescending(p => p.DateCreated)
+                         .ToList();
+
+            if (AuthService.IsAuthenticated && !string.IsNullOrEmpty(AuthService.Username))
+            {
+                var allAnswers = await OfflineDb.GetItemsAsync<OfflinePollAnswer>();
+                _userAnswers = allAnswers.Where(a => a.Username == AuthService.Username).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading polls: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private OfflinePollAnswer? GetUserVote(OfflinePoll poll)
+    {
+         return _userAnswers.FirstOrDefault(a => a.RemotePollId == poll.RemoteId);
+    }
+
+    private bool HasUserVotedLegacy(OfflinePoll poll)
+    {
+        if (string.IsNullOrEmpty(poll.VoterIds)) return false;
+        try
+        {
+            if (poll.VoterIds.Trim().StartsWith("["))
+            {
+                var voterIds = JsonSerializer.Deserialize<List<string>>(poll.VoterIds) ?? new List<string>();
+                return voterIds.Contains(AuthService.Username ?? "");
+            }
+            
+            // Fallback for comma separated
+            var legacyVoters = poll.VoterIds.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+            return legacyVoters.Contains(AuthService.Username ?? "");
+        }
+        catch { return false; }
+    }
+
+    private List<string> GetOptions(OfflinePoll poll)
+    {
+        if (string.IsNullOrEmpty(poll.Options)) return new List<string>();
+        try
+        {
+            // Try JSON first as requested by design
+            return JsonSerializer.Deserialize<List<string>>(poll.Options) ?? new List<string>();
+        }
+        catch
+        {
+            // Fallback to pipe if it's not JSON
+            return poll.Options.Split('|', StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+    }
+
+    private void SelectOption(int pollId, string option)
+    {
+        _selectedOptions[pollId] = option;
+    }
+
+    private int GetVotes(OfflinePoll poll, string option)
+    {
+        if (string.IsNullOrEmpty(poll.Votes)) return 0;
+        try
+        {
+            if (poll.Votes.Trim().StartsWith("{"))
+            {
+                var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes);
+                return votes?.ContainsKey(option) == true ? votes[option] : 0;
+            }
+
+            // Fallback to index-based comma separated counts
+            var options = GetOptions(poll);
+            var index = options.IndexOf(option);
+            var counts = poll.Votes.Split(',').Select(s => int.TryParse(s.Trim(), out var v) ? v : 0).ToList();
+            return (index >= 0 && index < counts.Count) ? counts[index] : 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Surveys] Error parsing votes for GetVotes: {ex.Message}");
+            return 0;
+        }
+    }
+
+    private int GetTotalVotes(OfflinePoll poll)
+    {
+        if (string.IsNullOrEmpty(poll.Votes)) return 0;
+        try
+        {
+            if (poll.Votes.Trim().StartsWith("{"))
+            {
+                var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes);
+                return votes?.Values.Sum() ?? 0;
+            }
+
+            return poll.Votes.Split(',').Select(s => int.TryParse(s.Trim(), out var v) ? v : 0).Sum();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Surveys] Error parsing votes for GetTotalVotes: {ex.Message}");
+            return 0;
+        }
+    }
+
+    private bool IsUserChoice(OfflinePoll poll, string option, OfflinePollAnswer? userVote)
+    {
+        if (userVote != null)
+        {
+            var options = GetOptions(poll);
+            return userVote.SelectedOptionIndex >= 0 && 
+                   userVote.SelectedOptionIndex < options.Count && 
+                   options[userVote.SelectedOptionIndex] == option;
+        }
+        return false;
+    }
+
+    private async Task SubmitVote(OfflinePoll poll)
+    {
+        if (!_selectedOptions.ContainsKey(poll.RemoteId) || string.IsNullOrEmpty(AuthService.Username)) return;
+
+        _isSubmitting = true;
+        try
+        {
+            var selectedOption = _selectedOptions[poll.RemoteId];
+            var options = GetOptions(poll);
+            var selectedIndex = options.IndexOf(selectedOption);
+
+            if (selectedIndex == -1) return;
+
+            var answer = new OfflinePollAnswer
+            {
+                RemotePollId = poll.RemoteId,
+                SelectedOptionIndex = selectedIndex,
+                Username = AuthService.Username,
+                AnsweredAt = DateTime.Now,
+                IsSynced = false
+            };
+
+            await OfflineDb.SaveItemAsync(answer);
+            
+            // Optimistic sync local poll object for display
+            var votesDict = string.IsNullOrEmpty(poll.Votes)
+                ? new Dictionary<string, int>()
+                : JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes) ?? new Dictionary<string, int>();
+
+            if (votesDict.ContainsKey(selectedOption)) votesDict[selectedOption]++;
+            else votesDict[selectedOption] = 1;
+
+            poll.Votes = JsonSerializer.Serialize(votesDict);
+
+            var voterIds = string.IsNullOrEmpty(poll.VoterIds)
+                ? new List<string>()
+                : JsonSerializer.Deserialize<List<string>>(poll.VoterIds) ?? new List<string>();
+            
+            if (!voterIds.Contains(AuthService.Username)) voterIds.Add(AuthService.Username);
+            poll.VoterIds = JsonSerializer.Serialize(voterIds);
+
+            await OfflineDb.SaveItemAsync(poll);
+
+            _userAnswers.Add(answer);
+            StateHasChanged();
+
+            // Attempt to trigger a sync immediately if online
+            if (Connectivity.Current.NetworkAccess == NetworkAccess.Internet)
+            {
+                Console.WriteLine("[Surveys] Device is Online. Triggering background sync...");
+                _ = Task.Run(async () => {
+                    try {
+                        Console.WriteLine("[Surveys] Background sync task started.");
+                        await SyncService.UploadPendingDataAsync();
+                        await SyncService.RefreshPollsAsync();
+                        await MainThread.InvokeOnMainThreadAsync(LoadDataAsync);
+                        Console.WriteLine("[Surveys] Background sync task completed.");
+                    } catch (Exception bgEx) {
+                        Console.WriteLine($"[Surveys] Background sync error: {bgEx.Message}");
+                    }
+                });
+            }
+            else
+            {
+                Console.WriteLine("[Surveys] Device is Offline. Vote saved locally and will sync when online.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting vote: {ex.Message}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+}

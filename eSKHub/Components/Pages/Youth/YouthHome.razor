@@ -1,0 +1,704 @@
+﻿@page "/youth/home"
+@layout eSKHub.Components.Layout.YouthLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Pages.Dialogs
+@using System.Text.RegularExpressions
+@using System.Text.Json
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Youth Home</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    @if (!_isAuthenticated)
+    {
+        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 400px; gap: 16px;">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Warning" Size="Size.Large" />
+            <MudText Typo="Typo.h6">Access Denied</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">You must be logged in as a youth to access this page.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/login">Go to Login</MudButton>
+        </div>
+    }
+    else if (_youth != null)
+    {
+        <!-- Welcome Banner -->
+        <div class="youthhome-welcome-banner">
+            <div class="youthhome-welcome-content">
+                <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 8px;">
+                    Hi, @_youth.FirstName!
+                </MudText>
+                <MudText Typo="Typo.body1" Style="opacity: 0.95;">
+                    Welcome to your community hub from @_youth.Barangay
+                </MudText>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <MudGrid Class="mb-6">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h5" Style="font-weight: 600; margin-bottom: 16px;">Quick Actions</MudText>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="youthhome-quick-action-card pa-6" Elevation="2" @onclick="OpenSubmitFeedbackDialog">
+                    <MudIcon Icon="@Icons.Material.Filled.Feedback" Color="Color.Primary" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Submit Feedback</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Share your thoughts</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudBadge Content="@_activePollCount"
+                          Color="Color.Error"
+                          Overlap="true"
+                          Visible="@_hasActivePolls"
+                          Style="width: 100%; height: 100%;">
+                    <MudPaper Class="youthhome-quick-action-card pa-6" Elevation="2" @onclick="OpenTakeSurveyDialog" Style="width: 100%; height: 100%;">
+                        <MudIcon Icon="@Icons.Material.Filled.HowToVote" Color="Color.Info" Size="Size.Large" Class="mb-3" />
+                        <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Take Survey</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Voice your opinion</MudText>
+                    </MudPaper>
+                </MudBadge>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="youthhome-quick-action-card pa-6" Elevation="2" @onclick="ViewAllEvents">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Success" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Don't Miss!</MudText>
+                    @if (_upcomingEvents.Any() && _upcomingEvents.First().EventDate.Date == DateTime.Today)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">See event for today</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">View the most upcoming event</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="youthhome-quick-action-card pa-6" Elevation="2" @onclick="ViewAllNews">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Warning" Size="Size.Large" Class="mb-3" />
+                    <MudText Typo="Typo.h6" Class="mb-1" Style="font-weight: 600;">Latest News</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Stay informed</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Latest Announcements -->
+        @if (_latestAnnouncements.Any())
+        {
+            <MudGrid Class="mb-6">
+                <MudItem xs="12">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <MudText Class="youthhome-section-title">Latest Announcements</MudText>
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => _showAllAnnouncements = !_showAllAnnouncements)">
+                            @(_showAllAnnouncements ? "Show Less" : "View All")
+                        </MudButton>
+                    </div>
+                </MudItem>
+                @foreach (var announcement in (_showAllAnnouncements ? _latestAnnouncements : _latestAnnouncements.Take(3)))
+                {
+                    <MudItem xs="12">
+                        <MudCard Class="youthhome-announcement-card" Elevation="2" @onclick="@(() => ViewAnnouncementDetails(announcement))">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600;">@announcement.Subject</MudText>
+                                    <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                            @(announcement.Audience == "Barangay" ? $"{announcement.TargetBarangay}" : "Public")
+                                        </MudChip>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @announcement.DateCreated.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    </div>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudText Typo="Typo.body2" Style="font-style: italic; margin-bottom: 8px;">
+                                    @announcement.ShortDescription
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                    @announcement.Body
+                                </MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        <!-- Available Programs - Auto-scrolling Carousel -->
+        @if (_availablePrograms.Any())
+        {
+            <MudGrid Class="mb-6">
+                <MudItem xs="12">
+                    <MudText Class="youthhome-section-title">Available Programs</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        Hover over a program to pause scrolling and click to view details
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12">
+                    <div class="youthhome-program-carousel-container">
+                        <div class="youthhome-program-carousel" style="--program-count: @_availablePrograms.Count;">
+                            @foreach (var program in _availablePrograms.Concat(_availablePrograms))
+                            {
+                                <MudCard Class="youthhome-program-card pa-4" Elevation="2" @onclick="@(() => ViewProgramDetails(program))">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(program.Category)">
+                                        @program.Category
+                                    </MudChip>
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-top: 8px; margin-bottom: 8px;">
+                                        @program.Title
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                        @program.Description
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Primary" Style="margin-top: 8px; font-weight: 500;">
+                                        Click to view details & register
+                                    </MudText>
+                                </MudCard>
+                            }
+                        </div>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        }
+
+        <!-- Upcoming Events -->
+        @if (_upcomingEvents.Any())
+        {
+            <MudGrid Class="mb-6">
+                <MudItem xs="12">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <MudText Class="youthhome-section-title">Upcoming Events</MudText>
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => _showAllEvents = !_showAllEvents)">
+                            @(_showAllEvents ? "Show Less" : "View All")
+                        </MudButton>
+                    </div>
+                </MudItem>
+                @foreach (var evt in (_showAllEvents ? _upcomingEvents : _upcomingEvents.Take(3)))
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudPaper Elevation="2" Class="pa-4 youthhome-event-card-clickable" Style="border-radius: 16px; height: 100%;" @onclick="@(() => ViewEventDetails(evt))">
+                            <div style="display: flex; gap: 16px; align-items: start;">
+                                <div style="background: rgba(102, 126, 234, 0.1); border-radius: 12px; padding: 12px; text-align: center; min-width: 70px;">
+                                    <div style="font-size: 0.75rem; font-weight: 600; color: #667eea; text-transform: uppercase;">@evt.EventDate.ToString("MMM")</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; line-height: 1;">@evt.EventDate.Day</div>
+                                </div>
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 4px;">@evt.Title</MudText>
+                                    <MudChip T="string" Size="Size.Small" Color="@GetEventTypeColor(evt.EventType)">@evt.EventType</MudChip>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        <!-- Latest News -->
+        @if (_latestNews.Any())
+        {
+            <MudGrid Class="mb-6">
+                <MudItem xs="12">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <MudText Class="youthhome-section-title">Latest News</MudText>
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => _showAllNews = !_showAllNews)">
+                            @(_showAllNews ? "Show Less" : "View All")
+                        </MudButton>
+                    </div>
+                </MudItem>
+                @foreach (var news in (_showAllNews ? _latestNews : _latestNews.Take(3)))
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Class="youthhome-news-card-clickable" Elevation="2" @onclick="@(() => ViewNewsDetails(news))" Style="height: 100%;">
+                            <MudCardContent>
+                                <MudChip T="string" Size="Size.Small" Color="@GetNewsTypeColor(news.NewsType)">
+                                    @news.NewsType
+                                </MudChip>
+                                <MudText Typo="Typo.h6" Style="font-weight: 600; margin: 8px 0;">@news.Title</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                                    @news.Summary
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 8px;">
+                                    @news.DateCreated.ToString("MMM dd, yyyy")
+                                </MudText>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    }
+    else if (_isLoading)
+    {
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+</MudContainer>
+
+@code {
+    private bool _isLoading = true;
+    private bool _isAuthenticated = false;
+    private Youth? _youth;
+    private int _youthId;
+    private List<Announcement> _latestAnnouncements = new();
+    private List<ProgramProject> _availablePrograms = new();
+    private List<Event> _upcomingEvents = new();
+    private List<NewsArticle> _latestNews = new();
+    private bool _hasActivePolls = false;
+    private int _activePollCount = 0;
+
+    private bool _showAllAnnouncements = false;
+    private bool _showAllEvents = false;
+    private bool _showAllNews = false;
+    private bool _checkedForPopups = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+
+        if (!UserState.IsAuthenticated || string.IsNullOrEmpty(UserState.Username) || !UserState.Username.StartsWith("youth_"))
+        {
+            _isAuthenticated = false;
+            _isLoading = false;
+            return;
+        }
+
+        _isAuthenticated = true;
+
+        if (int.TryParse(UserState.Username.Replace("youth_", ""), out _youthId))
+        {
+            await LoadYouthData();
+        }
+        else
+        {
+            _isAuthenticated = false;
+            _isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_checkedForPopups && _isAuthenticated && _youth != null)
+        {
+            _checkedForPopups = true;
+            await CheckAndShowLatestAnnouncement();
+            await CheckAndShowUpcomingEvent();
+        }
+    }
+
+    private async Task CheckAndShowLatestAnnouncement()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var youthBarangay = _youth!.Barangay;
+
+            // Get all published announcements for this youth's area
+            var allAnnouncements = await db.Announcements
+                .Where(a => a.IsPublished &&
+                           (a.Audience == "Public" ||
+                            (a.Audience == "Barangay" && a.TargetBarangay == youthBarangay)))
+                .OrderByDescending(a => a.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+
+            if (!allAnnouncements.Any())
+                return;
+
+            // Filter out announcements that have been closed by the user
+            var unreadAnnouncements = new List<Announcement>();
+
+            foreach (var announcement in allAnnouncements)
+            {
+                var announcementKey = $"youth_{_youthId}_announcement_{announcement.Id}_closed";
+                var announcementClosed = await JS.InvokeAsync<string>("localStorage.getItem", announcementKey);
+
+                if (string.IsNullOrEmpty(announcementClosed))
+                {
+                    unreadAnnouncements.Add(announcement);
+                }
+            }
+
+            // Show all unread announcements one by one (sequential)
+            foreach (var announcement in unreadAnnouncements)
+            {
+                var parameters = new DialogParameters
+            {
+                { "AnnouncementToView", announcement },
+                { "YouthId", _youthId }  // IMPORTANT: Pass YouthId here
+            };
+
+                var options = new DialogOptions
+                {
+                    CloseButton = true,
+                    MaxWidth = MaxWidth.Large,
+                    FullWidth = true,
+                    BackdropClick = false,
+                    CloseOnEscapeKey = true
+                };
+
+                var dialog = await DialogService.ShowAsync<YouthViewAnnouncementDialog>("📢 Latest Announcement", parameters, options);
+                await dialog.Result;
+
+                // Small delay between dialogs
+                await Task.Delay(300);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking latest announcement: {ex.Message}");
+        }
+    }
+
+    private async Task CheckAndShowUpcomingEvent()
+    {
+        if (!_upcomingEvents.Any())
+            return;
+
+        try
+        {
+            var today = DateTime.Today;
+            var eventsToday = _upcomingEvents.Where(e => e.EventDate.Date == today).OrderBy(e => e.StartTime).ToList();
+
+            if (eventsToday.Any())
+            {
+                // Show SEQUENTIAL popups for ALL events happening today that haven't been closed
+                foreach (var evt in eventsToday)
+                {
+                    var eventKey = $"youth_{_youthId}_event_{evt.Id}_closed";
+                    var eventClosed = await JS.InvokeAsync<string>("localStorage.getItem", eventKey);
+
+                    if (string.IsNullOrEmpty(eventClosed))
+                    {
+                        await ShowEventDialog(evt, "HAPPENING NOW", true); // Pass 'true' to auto-save closed state
+                    }
+                }
+            }
+            else
+            {
+                // Fallback to original logic: Show just the single most upcoming event
+                var mostUpcomingEvent = _upcomingEvents.First();
+                var eventKey = $"youth_{_youthId}_event_{mostUpcomingEvent.Id}_closed";
+                var eventClosed = await JS.InvokeAsync<string>("localStorage.getItem", eventKey);
+
+                if (string.IsNullOrEmpty(eventClosed))
+                {
+                    await ShowEventDialog(mostUpcomingEvent, "UPCOMING EVENT", true);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking upcoming event: {ex.Message}");
+        }
+    }
+
+    private async Task LoadYouthData()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _youth = await db.Youths.FindAsync(_youthId);
+
+            if (_youth == null)
+            {
+                _isAuthenticated = false;
+                _isLoading = false;
+                return;
+            }
+
+            var youthBarangay = _youth.Barangay;
+
+            _latestAnnouncements = await db.Announcements
+                .Where(a => a.IsPublished &&
+                           (a.Audience == "Public" ||
+                            (a.Audience == "Barangay" && a.TargetBarangay == youthBarangay)))
+                .OrderByDescending(a => a.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _availablePrograms = await db.ProgramsProjects
+                .Where(p => p.IsPublished &&
+                           p.Status == "Approved" &&
+                           (p.Audience == "Public" ||
+                            (p.Audience == "Barangay" && p.TargetBarangay == youthBarangay)))
+                .OrderByDescending(p => p.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _upcomingEvents = await db.Events
+                .Where(e => e.IsPublished &&
+                           e.EventDate.Date >= DateTime.Today &&
+                           (e.Audience == "Public" ||
+                            (e.Audience == "Barangay" && e.TargetBarangay == youthBarangay)))
+                .OrderBy(e => e.EventDate)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _latestNews = await db.NewsArticles
+                .Where(n => n.IsPublished)
+                .OrderByDescending(n => n.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+            _isAuthenticated = false;
+        }
+        finally
+        {
+            _isLoading = false;
+            await CheckForActivePolls();
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckForActivePolls()
+    {
+        if (_youth == null) return;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var youthBarangay = _youth.Barangay;
+            var currentUserId = $"youth_{_youthId}";
+
+            var activePolls = await db.Polls
+                .Where(p => p.IsActive &&
+                           (!p.DateExpires.HasValue || p.DateExpires.Value > DateTime.Now) &&
+                           (p.Audience == "Public" ||
+                            (p.Audience == "Barangay" && p.TargetBarangay == youthBarangay)))
+                .AsNoTracking()
+                .ToListAsync();
+
+            var unansweredPolls = activePolls.Where(poll =>
+            {
+                if (string.IsNullOrEmpty(poll.VoterIds))
+                    return true;
+
+                try
+                {
+                    var voterIds = JsonSerializer.Deserialize<List<string>>(poll.VoterIds) ?? new List<string>();
+                    return !voterIds.Contains(currentUserId);
+                }
+                catch
+                {
+                    return true;
+                }
+            }).ToList();
+
+            _activePollCount = unansweredPolls.Count;
+            _hasActivePolls = _activePollCount > 0;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking polls: {ex.Message}");
+        }
+    }
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Youth Development" => Color.Primary,
+        "Environment" => Color.Success,
+        "Sports" => Color.Info,
+        "Employment" => Color.Warning,
+        "Health" => Color.Error,
+        _ => Color.Default
+    };
+
+    private Color GetEventTypeColor(string eventType) => eventType switch
+    {
+        "Meeting" => Color.Info,
+        "Sports" => Color.Success,
+        "Community" => Color.Primary,
+        "Workshop" => Color.Warning,
+        "Training" => Color.Error,
+        "Cultural" => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private Color GetNewsTypeColor(string newsType) => newsType switch
+    {
+        "Breaking" => Color.Error,
+        "Feature" => Color.Primary,
+        "Community" => Color.Success,
+        "Event" => Color.Info,
+        "Achievement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private async Task ViewAnnouncementDetails(Announcement announcement)
+    {
+        var parameters = new DialogParameters { { "AnnouncementToView", announcement } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<YouthViewAnnouncementDialog>("Announcement Details", parameters, options);
+    }
+
+    private async Task ViewProgramDetails(ProgramProject program)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Program", program },
+            { "YouthId", _youthId }
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<YouthViewProgramDialog>("Program Details", parameters, options);
+    }
+
+    private async Task ViewEventDetails(Event evt)
+    {
+        var parameters = new DialogParameters { { "EventToView", evt } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<YouthViewEventDialog>("Event Details", parameters, options);
+    }
+
+    private async Task ViewNewsDetails(NewsArticle news)
+    {
+        var parameters = new DialogParameters { { "NewsToView", news } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<YouthViewNewsDialog>("News Details", parameters, options);
+    }
+
+    private async Task ViewAllEvents()
+    {
+        if (_upcomingEvents.Any())
+        {
+            var today = DateTime.Today;
+            var eventsToday = _upcomingEvents.Where(e => e.EventDate.Date == today).OrderBy(e => e.StartTime).ToList();
+
+            if (eventsToday.Any())
+            {
+                // Manual click: Cycle through ALL events today, regardless of closed status.
+                // Request says "keep the popup coming".
+                foreach (var evt in eventsToday)
+                {
+                    await ShowEventDialog(evt, "HAPPENING NOW", true); // Also mark as read to prevent auto-popup next reload
+                }
+            }
+            else
+            {
+                var mostUpcomingEvent = _upcomingEvents.First();
+                await ShowEventDialog(mostUpcomingEvent, "UPCOMING EVENT", true);
+            }
+        }
+        else
+        {
+            Snackbar.Add("No upcoming events available at the moment.", Severity.Info);
+        }
+    }
+
+    private async Task ShowEventDialog(Event evt, string title, bool markAsClosed)
+    {
+        var parameters = new DialogParameters
+        {
+            { "MostUpcomingEvent", evt },
+            { "DialogTitle", title }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true,
+            BackdropClick = true,
+            CloseOnEscapeKey = true
+        };
+
+        // Pass title as dictionary parameter or however the dialog expects it.
+        // Wait, I updated the dialog to accept [Parameter] DialogTitle. MudBlazor passes params via dictionary.
+        // So putting it in parameters is correct. "DialogTitle" key matches property name.
+
+        // Note: The previous code passed title as argument to ShowAsync<T>(title, ...).
+        // MudBlazor uses that title string for the header unless overridden.
+        // But my custom dialog component has its own <Title> block using the Parameter.
+        // So the title string passed to ShowAsync might be redundant or displayed twice?
+        // Actually, if I use <MudDialog><TitleContent>...</TitleContent></MudDialog>, that replaces the default header usually?
+        // Let's pass it in ShowAsync too just in case, but the crucial part is the Parameter.
+
+        var dialog = await DialogService.ShowAsync<YouthUpcomingEventPreviewDialog>(title, parameters, options);
+        await dialog.Result;
+
+        if (markAsClosed)
+        {
+            var eventKey = $"youth_{_youthId}_event_{evt.Id}_closed";
+            await JS.InvokeVoidAsync("localStorage.setItem", eventKey, "true");
+        }
+    }
+
+    private async Task ViewAllNews()
+    {
+        if (_latestNews.Any())
+        {
+            var mostRecentNews = _latestNews.First();
+
+            var parameters = new DialogParameters
+        {
+            { "MostRecentNews", mostRecentNews }
+        };
+
+            var options = new DialogOptions
+            {
+                CloseButton = true,
+                MaxWidth = MaxWidth.Large,
+                FullWidth = true,
+                BackdropClick = true,
+                CloseOnEscapeKey = true
+            };
+
+            await DialogService.ShowAsync<YouthLatestNewsPreviewDialog>("Latest News", parameters, options);
+        }
+        else
+        {
+            Snackbar.Add("No news available at the moment.", Severity.Info);
+        }
+    }
+
+    private async Task OpenSubmitFeedbackDialog()
+    {
+        if (_youth == null) return;
+
+        var parameters = new DialogParameters
+        {
+            { "YouthName", _youth.FullName },
+            { "YouthEmail", _youth.Email },
+            { "YouthContact", _youth.ContactNumber }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<SubmitFeedbackDialog>("Submit Feedback", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            Snackbar.Add("Thank you for your feedback!", Severity.Success);
+        }
+    }
+
+    private async Task OpenTakeSurveyDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<TakeSurveyDialog>("Community Polls", options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await Task.Delay(100);
+            await CheckForActivePolls();
+            StateHasChanged();
+        }
+    }
+}

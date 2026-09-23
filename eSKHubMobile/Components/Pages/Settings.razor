@@ -1,0 +1,676 @@
+﻿@page "/settings"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject OfflineSyncService SyncService
+@inject OfflineDbService OfflineDb
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="page-container">
+    <header class="page-header">
+        <button class="back-btn" @onclick="GoBack">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <h1>Settings</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <div class="content-area">
+        <!-- Sync Section -->
+        <div class="settings-section">
+            <div class="section-accent primary"></div>
+            <div class="section-content">
+                <div class="section-title">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" fill="none" stroke="currentColor" stroke-width="2" /><path d="M22 6l-10 7L2 6" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <h2>Data Synchronization</h2>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">Connection:</span>
+                        <span class="@(_isOnline ? "status-online" : "status-offline")">
+                            <span class="dot"></span>
+                            @(_isOnline ? "Online" : "Offline")
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Last Sync:</span>
+                        <span>@_lastSyncTime</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Cached Users:</span>
+                        <span>@_cachedUserCount</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Announcements:</span>
+                        <span>@_cachedAnnouncementCount</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">News Articles:</span>
+                        <span>@_cachedNewsCount</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Events:</span>
+                        <span>@_cachedEventCount</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Programs:</span>
+                        <span>@_cachedProgramCount</span>
+                    </div>
+                </div>
+
+                @if (_isOnline)
+                {
+                    @if (_serverPackageInfo != null)
+                    {
+                        <div class="server-info">
+                            <div class="server-info-header">
+                                <svg viewBox="0 0 24 24"><path d="M20 4v5h-4M4 20v-5h4M4 4v5h4M20 20v-5h-4M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                <h3>Available from Server</h3>
+                            </div>
+                            <div class="server-grid">
+                                <div class="server-item">
+                                    <span class="label">Users</span>
+                                    <span class="value">@_serverPackageInfo.UserCount</span>
+                                </div>
+                                <div class="server-item">
+                                    <span class="label">Size</span>
+                                    <span class="value">@_serverPackageInfo.SizeEstimate</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <button class="btn btn-primary" @onclick="ManualSync" disabled="@_isSyncing">
+                        @if (_isSyncing)
+                        {
+                            <span class="spinner"></span>
+                            <span>Syncing...</span>
+                        }
+                        else
+                        {
+                            <svg viewBox="0 0 24 24"><path d="M20 11a8.1 8.1 0 00-15.5-2m-.5-5v5h5M4 13a8.1 8.1 0 0015.5 2m.5 5v-5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                            <span>Sync Now</span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <div class="setting-alert warning">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 8v4M12 16h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                        <span>Internet connection required for sync</span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(_syncMessage))
+                {
+                    <div class="setting-alert @(_syncSuccess ? "success" : "error")">
+                        @if (_syncSuccess)
+                        {
+                            <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                        }
+                        else
+                        {
+
+                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M15 9l-6 6M9 9l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                        }
+                        <span>@_syncMessage</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Account Section -->
+        <div class="settings-section">
+            <div class="section-accent secondary"></div>
+            <div class="section-content">
+                <div class="section-title">
+                    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 7a4 4 0 100-8 4 4 0 000 8z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <h2>Account</h2>
+                </div>
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">Username:</span>
+                        <span>@AuthService.Username</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Role:</span>
+                        <span>@AuthService.Role</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-danger" @onclick="HandleLogout">
+                    <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Database Section -->
+        <div class="settings-section">
+            <div class="section-accent accent"></div>
+            <div class="section-content">
+                <div class="section-title">
+                    <svg viewBox="0 0 24 24"><path d="M4 7V5a2 2 0 012-2h12a2 2 0 012 2v2M4 7a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2M4 7h16M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2M10 12h4" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                    <h2>Database</h2>
+                </div>
+                <button class="btn btn-warning" @onclick="ClearCache">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                    <span>Clear Offline Cache</span>
+                </button>
+                <p class="warning-text">
+                    This will delete all offline data. You'll need internet to login again.
+                </p>
+            </div>
+        </div>
+
+        <!-- App Info -->
+        <div class="settings-section">
+            <div class="section-accent info"></div>
+            <div class="section-content">
+                <div class="section-title">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 16v-4M12 8h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+                    <h2>App Information</h2>
+                </div>
+                <div class="info-card">
+                    <div class="info-row">
+                        <span class="info-label">Version:</span>
+                        <span>1.0.0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Build:</span>
+                        <span>@DateTime.Now.ToString("yyyy.MM.dd")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .page-container {
+        background-color: #f8f9fe;
+        min-height: 100vh;
+        color: #2d3436;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 10px 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+        .page-header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+    .header-spacer {
+        width: 40px;
+    }
+
+    .back-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+
+        .back-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+    .content-area {
+        padding: 20px;
+    }
+
+    .settings-section {
+        background: white;
+        border-radius: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        display: flex;
+        overflow: hidden;
+        align-items: stretch;
+    }
+
+    .section-accent {
+        width: 6px;
+        flex-shrink: 0;
+    }
+
+        .section-accent.primary {
+            background: #7e6fff;
+        }
+
+        .section-accent.secondary {
+            background: #f093fb;
+        }
+
+        .section-accent.accent {
+            background: #ff6b6b;
+        }
+
+        .section-accent.info {
+            background: #2ecc71;
+        }
+
+    .section-content {
+        padding: 20px;
+        flex: 1;
+    }
+
+    .section-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        color: #2d3436;
+    }
+
+        .section-title svg {
+            width: 20px;
+            height: 20px;
+            color: #b2bec3;
+        }
+
+        .section-title h2 {
+            font-size: 16px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+    .info-card {
+        background: #f8f9fe;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 20px;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+    .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #636e72;
+    }
+
+    .info-row span:not(.info-label) {
+        font-size: 12px;
+        font-weight: 700;
+        color: #2d3436;
+    }
+
+    .status-online {
+        color: #2ecc71;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .status-offline {
+        color: #f39c12;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    .server-info {
+        background: #eef2ff;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+        border-left: 4px solid #667eea;
+    }
+
+    .server-info-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+        .server-info-header svg {
+            width: 16px;
+            height: 16px;
+            color: #667eea;
+        }
+
+        .server-info-header h3 {
+            font-size: 13px;
+            font-weight: 800;
+            margin: 0;
+            color: #4338ca;
+        }
+
+    .server-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .server-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+        .server-item .label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #667eea;
+            opacity: 0.7;
+        }
+
+        .server-item .value {
+            font-size: 12px;
+            font-weight: 800;
+            color: #1e1b4b;
+        }
+
+    .btn {
+        width: 100%;
+        border: none;
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: all 0.2s;
+    }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .btn-primary {
+        background: #7e6fff;
+        color: white;
+        box-shadow: 0 4px 15px rgba(126, 111, 255, 0.3);
+    }
+
+    .btn-danger {
+        background: #ff7675;
+        color: white;
+        box-shadow: 0 4px 15px rgba(255, 118, 117, 0.3);
+    }
+
+    .btn-warning {
+        background: #fab1a0;
+        color: white;
+        box-shadow: 0 4px 15px rgba(250, 177, 160, 0.3);
+    }
+
+    .setting-alert {
+        margin-top: 16px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+        .setting-alert svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .setting-alert.warning {
+            background: #fff8eb;
+            color: #d97706;
+        }
+
+        .setting-alert.success {
+            background: #ecfdf5;
+            color: #059669;
+        }
+
+        .setting-alert.error {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+    .warning-text {
+        font-size: 11px;
+        color: #b2bec3;
+        margin-top: 12px;
+        text-align: center;
+        font-weight: 500;
+    }
+
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid white;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+</style>
+
+@code {
+    private bool _isOnline = true;
+    private bool _isSyncing = false;
+    private string _syncMessage = string.Empty;
+    private bool _syncSuccess = false;
+    private string _lastSyncTime = "Never";
+    private int _cachedUserCount = 0;
+    private int _cachedAnnouncementCount = 0;
+    private int _cachedNewsCount = 0;
+    private int _cachedEventCount = 0;
+    private int _cachedProgramCount = 0;
+    private PackageInfo? _serverPackageInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isOnline = Connectivity.Current.NetworkAccess == NetworkAccess.Internet;
+        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
+
+        await LoadCacheInfo();
+
+        if (_isOnline)
+        {
+            await LoadServerInfo();
+        }
+    }
+
+    private async Task LoadCacheInfo()
+    {
+        try
+        {
+            // Load last sync time from preferences
+            _lastSyncTime = Preferences.Get("LastSyncTime", "Never");
+
+            // Load all cached counts
+            var announcements = await OfflineDb.GetAnnouncementsAsync();
+            _cachedAnnouncementCount = announcements.Count;
+
+            var news = await OfflineDb.GetItemsAsync<OfflineNewsArticle>();
+            _cachedNewsCount = news.Count;
+
+            var events = await OfflineDb.GetItemsAsync<OfflineEvent>();
+            _cachedEventCount = events.Count;
+
+            var programs = await OfflineDb.GetItemsAsync<OfflineProgramProject>();
+            _cachedProgramCount = programs.Count;
+
+            // Estimate user count (we don't have a direct method for this)
+            _cachedUserCount = 1; // At least current user
+        }
+        catch
+        {
+            _cachedUserCount = 0;
+            _cachedAnnouncementCount = 0;
+            _cachedNewsCount = 0;
+            _cachedEventCount = 0;
+            _cachedProgramCount = 0;
+        }
+    }
+
+    private async Task LoadServerInfo()
+    {
+        try
+        {
+            _serverPackageInfo = await SyncService.GetPackageInfoAsync();
+        }
+        catch
+        {
+            _serverPackageInfo = null;
+        }
+    }
+
+    private async Task ManualSync()
+    {
+        _isSyncing = true;
+        _syncMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var (success, message, users, announcements) = await SyncService.DownloadOfflinePackageAsync();
+
+            _syncSuccess = success;
+            _syncMessage = success
+                ? $"Sync completed successfully!"
+                : $"{message}";
+
+            if (success)
+            {
+                var syncTime = DateTime.Now.ToString("MMM dd, yyyy HH:mm");
+                _lastSyncTime = syncTime;
+
+                // Persist last sync time
+                Preferences.Set("LastSyncTime", syncTime);
+
+                await LoadCacheInfo();
+            }
+        }
+        catch (Exception ex)
+        {
+            _syncSuccess = false;
+            _syncMessage = $"✗ Error: {ex.Message}";
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+
+            await Task.Delay(5000);
+            _syncMessage = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ClearCache()
+    {
+        var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+        if (page == null) return;
+
+        var confirm = await page.DisplayAlert(
+            "Confirm Clear Cache",
+            "This will delete all offline data. You'll need internet to login again. Continue?",
+            "Yes, Clear",
+            "Cancel");
+
+        if (confirm)
+        {
+            await OfflineDb.ClearAllDataAsync();
+            _cachedUserCount = 0;
+            _cachedAnnouncementCount = 0;
+            _cachedNewsCount = 0;
+            _cachedEventCount = 0;
+            _cachedProgramCount = 0;
+            _lastSyncTime = "Never";
+
+            // Clear persisted sync time
+            Preferences.Remove("LastSyncTime");
+
+            await page.DisplayAlert(
+                "Cache Cleared",
+                "All offline data has been cleared.",
+                "OK");
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("/login");
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/home");
+    }
+
+    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+    {
+        _isOnline = e.NetworkAccess == NetworkAccess.Internet;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+    }
+}

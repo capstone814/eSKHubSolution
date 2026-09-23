@@ -1,0 +1,565 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Formats.Png
+@using MudColor = MudBlazor.Color
+@using MudSize = MudBlazor.Size
+@using ImageSharpSize = SixLabors.ImageSharp.Size
+@using ImageSharpResizeOptions = SixLabors.ImageSharp.Processing.ResizeOptions
+@using ImageSharpResizeMode = SixLabors.ImageSharp.Processing.ResizeMode
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject AppDbContext Db
+@inject UserStateService UserState
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        EDIT PROGRAM/PROJECT PROPOSAL
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_editProgram">
+            <MudGrid Spacing="2">
+                @if (_editProgram.Status == "Disapproved" && !string.IsNullOrEmpty(_editProgram.AdminFeedback))
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Warning">
+                            <strong>Admin Feedback:</strong> @_editProgram.AdminFeedback
+                        </MudAlert>
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Title"
+                                  @bind-Value="_editProgram.Title"
+                                  Required="true"
+                                  RequiredError="Title is required"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="200" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Description"
+                                  @bind-Value="_editProgram.Description"
+                                  Required="true"
+                                  RequiredError="Description is required"
+                                  Lines="4"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Objectives"
+                                  @bind-Value="_editProgram.Objectives"
+                                  Required="true"
+                                  RequiredError="Objectives are required"
+                                  Lines="3"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Target Beneficiaries"
+                                  @bind-Value="_editProgram.TargetBeneficiaries"
+                                  Required="true"
+                                  RequiredError="Target beneficiaries required"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="500" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string"
+                               Label="Category"
+                               @bind-Value="_editProgram.Category"
+                               Required="true"
+                               RequiredError="Category is required"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Youth Development")">Youth Development</MudSelectItem>
+                        <MudSelectItem Value="@("Environment")">Environment</MudSelectItem>
+                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                        <MudSelectItem Value="@("Employment")">Employment</MudSelectItem>
+                        <MudSelectItem Value="@("Health")">Health</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Expected Outcomes"
+                                  @bind-Value="_editProgram.ExpectedOutcomes"
+                                  Required="true"
+                                  RequiredError="Expected outcomes are required"
+                                  Lines="3"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudNumericField T="decimal"
+                                     Label="Budget (PHP)"
+                                     @bind-Value="_editProgram.Budget"
+                                     Required="true"
+                                     RequiredError="Budget is required"
+                                     Variant="Variant.Outlined"
+                                     Min="0"
+                                     Format="N2" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Timeline"
+                                  @bind-Value="_editProgram.Timeline"
+                                  Required="true"
+                                  RequiredError="Timeline is required"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="200" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Label="Start Date"
+                                   @bind-Date="_startDate"
+                                   Required="true"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker Label="End Date"
+                                   @bind-Date="_endDate"
+                                   Required="true"
+                                   Variant="Variant.Outlined"
+                                   MinDate="_startDate" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Venue"
+                                  @bind-Value="_editProgram.Venue"
+                                  Required="true"
+                                  RequiredError="Venue is required"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="300" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Partners/Collaborators (Optional)"
+                                  @bind-Value="_editProgram.Partners"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="@(_editProgram.Audience == "Barangay" ? 6 : 12)">
+                    <MudSelect T="string"
+                               Label="Audience"
+                               Value="@_editProgram.Audience"
+                               ValueChanged="OnAudienceChanged"
+                               Required="true"
+                               RequiredError="Audience is required"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Public")">Public (Municipality-wide)</MudSelectItem>
+                        <MudSelectItem Value="@("Barangay")">My Barangay Only</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                @if (_editProgram.Audience == "Barangay")
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string"
+                                      Label="Target Barangay"
+                                      Value="@_currentUserArea"
+                                      Variant="Variant.Outlined"
+                                      ReadOnly="true"
+                                      Disabled="true" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Supporting Documents</MudText>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        @if (!string.IsNullOrEmpty(_attachmentPreviewUrl))
+                        {
+                            <div style="position: relative; display: inline-block;">
+                                @if (_attachmentType == "image")
+                                {
+                                    <img src="@_attachmentPreviewUrl" alt="Preview" style="max-height: 200px; max-width: 100%; border-radius: 6px;" />
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="MudColor.Info" Size="MudSize.Large">
+                                        @(_attachmentFileName ?? "Document")
+                                    </MudChip>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Color="MudColor.Error"
+                                               Size="MudSize.Small"
+                                               OnClick="ClearAttachment"
+                                               Style="position: absolute; top: -8px; right: -8px;" />
+                            </div>
+                        }
+                        else if (_editProgram.AttachmentData != null && _editProgram.AttachmentData.Length > 0)
+                        {
+                            <div style="position: relative; display: inline-block;">
+                                @if (_editProgram.AttachmentType == "image")
+                                {
+                                    <img src="@GetExistingAttachmentPath()" alt="Current attachment" style="max-height: 200px; max-width: 100%; border-radius: 6px;" />
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile" Color="MudColor.Info" Size="MudSize.Large">
+                                        @(_editProgram.Attachment ?? "Document")
+                                    </MudChip>
+                                }
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Color="MudColor.Error"
+                                               Size="MudSize.Small"
+                                               OnClick="RemoveExistingAttachment"
+                                               Style="position: absolute; top: -8px; right: -8px;" />
+                            </div>
+                        }
+                        else
+                        {
+                            <label for="upload-program-edit-attachment" style="cursor: pointer; display: inline-block;">
+                                <MudPaper Class="pa-4 d-flex align-center justify-center"
+                                          Style="border: 2px dashed #7e6fff; background: transparent;"
+                                          Elevation="0">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Color="MudColor.Primary" Size="MudSize.Large" />
+                                    <MudText Typo="Typo.body2" Class="ml-2">Click to upload</MudText>
+                                </MudPaper>
+                            </label>
+                        }
+                        <InputFile id="upload-program-edit-attachment"
+                                   OnChange="OnFileChanged"
+                                   accept="image/*,.pdf,.doc,.docx"
+                                   style="display: none;" />
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        @if (ProgramToEdit.Id > 0)
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="MudBlazor.Color.Info"
+                       StartIcon="@Icons.Material.Filled.People"
+                       OnClick="ViewParticipants">
+                View Participants (@_participantCount)
+            </MudButton>
+        }
+        <MudSpacer />
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="MudColor.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="MudSize.Small" Indeterminate="true" Class="mr-2" />
+                <span>Updating...</span>
+            }
+            else
+            {
+                <span>Update</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    [Parameter] public ProgramProject ProgramToEdit { get; set; } = default!;
+
+    private ProgramProject _editProgram = new();
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    private string? _attachmentPreviewUrl;
+    private byte[]? _attachmentBytes;
+    private string? _attachmentFileName;
+    private string? _attachmentType;
+    private string? _attachmentMimeType;
+    private bool _removeExisting = false;
+    private string _currentUserArea = string.Empty;  // Add this line
+    private int _participantCount = 0;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        _currentUserArea = UserState.Area ?? "";
+
+        _editProgram = new ProgramProject
+        {
+            Id = ProgramToEdit.Id,
+            Title = ProgramToEdit.Title,
+            Description = ProgramToEdit.Description,
+            Objectives = ProgramToEdit.Objectives,
+            TargetBeneficiaries = ProgramToEdit.TargetBeneficiaries,
+            ExpectedOutcomes = ProgramToEdit.ExpectedOutcomes,
+            Budget = ProgramToEdit.Budget,
+            Timeline = ProgramToEdit.Timeline,
+            Category = ProgramToEdit.Category,
+            Venue = ProgramToEdit.Venue,
+            Partners = ProgramToEdit.Partners,
+            AttachmentType = ProgramToEdit.AttachmentType,
+            AttachmentData = ProgramToEdit.AttachmentData,
+            AttachmentMimeType = ProgramToEdit.AttachmentMimeType,
+            Attachment = ProgramToEdit.Attachment,
+            ProposedBy = ProgramToEdit.ProposedBy,
+            ProposerPosition = ProgramToEdit.ProposerPosition,
+            ProposerArea = ProgramToEdit.ProposerArea,
+            Status = ProgramToEdit.Status,
+            AdminFeedback = ProgramToEdit.AdminFeedback,
+            Audience = ProgramToEdit.Audience,
+            TargetBarangay = ProgramToEdit.TargetBarangay
+        };
+
+        _startDate = ProgramToEdit.StartDate;
+        _endDate = ProgramToEdit.EndDate;
+        await LoadParticipantCount();
+    }
+
+    private async Task LoadParticipantCount()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _participantCount = await db.ProgramParticipations
+                .Where(p => p.ProgramId == ProgramToEdit.Id)
+                .CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading participant count: {ex.Message}");
+        }
+    }
+
+    private async Task ViewParticipants()
+    {
+        var parameters = new DialogParameters { { "Program", ProgramToEdit } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<CouncilViewProgramParticipants>("Program Participants", parameters, options);
+    }
+
+    private void OnAudienceChanged(string newAudience)
+    {
+        _editProgram.Audience = newAudience;
+        if (newAudience == "Barangay")
+        {
+            _editProgram.TargetBarangay = UserState.Area;
+        }
+        else
+        {
+            _editProgram.TargetBarangay = null;
+        }
+        StateHasChanged();
+    }
+
+    private string GetExistingAttachmentPath()
+    {
+        if (_editProgram.AttachmentData != null && !string.IsNullOrEmpty(_editProgram.AttachmentMimeType))
+        {
+            return $"data:{_editProgram.AttachmentMimeType};base64,{Convert.ToBase64String(_editProgram.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid || !_startDate.HasValue || !_endDate.HasValue)
+        {
+            Snackbar.Add("Please fill in all required fields", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await Db.Database.BeginTransactionAsync();
+            var programInDb = await Db.ProgramsProjects.FindAsync(_editProgram.Id);
+
+            if (programInDb != null)
+            {
+                programInDb.Title = _editProgram.Title;
+                programInDb.Description = _editProgram.Description;
+                programInDb.Objectives = _editProgram.Objectives;
+                programInDb.TargetBeneficiaries = _editProgram.TargetBeneficiaries;
+                programInDb.ExpectedOutcomes = _editProgram.ExpectedOutcomes;
+                programInDb.Budget = _editProgram.Budget;
+                programInDb.Timeline = _editProgram.Timeline;
+                programInDb.StartDate = _startDate.Value;
+                programInDb.EndDate = _endDate.Value;
+                programInDb.Category = _editProgram.Category;
+                programInDb.Venue = _editProgram.Venue;
+                programInDb.Partners = _editProgram.Partners;
+                programInDb.DateModified = DateTime.Now;
+                programInDb.Audience = _editProgram.Audience;
+                programInDb.TargetBarangay = _editProgram.TargetBarangay;
+
+                // Reset status to Pending if edit access was granted
+                if (programInDb.EditAccessGranted)
+                {
+                    programInDb.Status = "Pending";
+                    programInDb.AdminFeedback = null;
+                    programInDb.ReviewedBy = null;
+                    programInDb.ReviewedDate = null;
+                    programInDb.EditAccessGranted = false;
+                    programInDb.EditAccessRequested = false;
+                    programInDb.EditAccessGrantedBy = null;
+                    programInDb.EditAccessGrantedDate = null;
+                    programInDb.IsPublished = false;
+                }
+                // Reset status to Pending if it was Disapproved
+                else if (programInDb.Status == "Disapproved")
+                {
+                    programInDb.Status = "Pending";
+                    programInDb.AdminFeedback = null;
+                }
+
+                // Handle attachment
+                if (_attachmentBytes != null && !string.IsNullOrEmpty(_attachmentMimeType))
+                {
+                    programInDb.AttachmentData = _attachmentBytes;
+                    programInDb.AttachmentMimeType = _attachmentMimeType;
+                    programInDb.AttachmentType = _attachmentType;
+                    programInDb.Attachment = _attachmentFileName;
+                }
+                else if (_removeExisting)
+                {
+                    programInDb.AttachmentData = null;
+                    programInDb.AttachmentMimeType = null;
+                    programInDb.Attachment = null;
+                    programInDb.AttachmentType = null;
+                }
+
+                await Db.SaveChangesAsync();
+                await db.CommitAsync();
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating program/project: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            Snackbar.Add("File size must be less than 10MB", Severity.Warning);
+            return;
+        }
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+        var documentExtensions = new[] { ".pdf", ".doc", ".docx" };
+
+        if (imageExtensions.Contains(extension))
+        {
+            _attachmentType = "image";
+            await ProcessImageFile(file);
+        }
+        else if (documentExtensions.Contains(extension))
+        {
+            _attachmentType = "document";
+            await ProcessDocumentFile(file);
+        }
+        else
+        {
+            Snackbar.Add("Unsupported file type", Severity.Warning);
+            return;
+        }
+
+        _attachmentFileName = $"{Guid.NewGuid()}{extension}";
+    }
+
+    private async Task ProcessImageFile(IBrowserFile file)
+    {
+        using var inputStream = file.OpenReadStream(10 * 1024 * 1024);
+        using var image = await Image.LoadAsync(inputStream);
+
+        image.Mutate(x => x.Resize(new ImageSharpResizeOptions
+        {
+            Size = new ImageSharpSize(800, 800),
+            Mode = ImageSharpResizeMode.Max
+        }));
+
+        using var ms = new MemoryStream();
+
+        if (Path.GetExtension(file.Name).ToLowerInvariant() == ".png")
+        {
+            var encoder = new PngEncoder { CompressionLevel = PngCompressionLevel.BestCompression };
+            await image.SaveAsync(ms, encoder);
+            _attachmentMimeType = "image/png";
+            _attachmentPreviewUrl = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+        }
+        else
+        {
+            var encoder = new JpegEncoder { Quality = 70 };
+            await image.SaveAsync(ms, encoder);
+            _attachmentMimeType = "image/jpeg";
+            _attachmentPreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(ms.ToArray())}";
+        }
+
+        _attachmentBytes = ms.ToArray();
+
+        if (_attachmentBytes.Length > 500 * 1024)
+        {
+            using var image2 = await Image.LoadAsync(new MemoryStream(_attachmentBytes));
+            using var ms2 = new MemoryStream();
+
+            var encoder = new JpegEncoder { Quality = 60 };
+            await image2.SaveAsync(ms2, encoder);
+            _attachmentBytes = ms2.ToArray();
+            _attachmentMimeType = "image/jpeg";
+            _attachmentPreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(_attachmentBytes)}";
+        }
+
+        Snackbar.Add($"Image uploaded ({_attachmentBytes.Length / 1024}KB)", Severity.Success);
+    }
+
+    private async Task ProcessDocumentFile(IBrowserFile file)
+    {
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(10 * 1024 * 1024).CopyToAsync(ms);
+        _attachmentBytes = ms.ToArray();
+        _attachmentPreviewUrl = "document";
+
+        _attachmentMimeType = file.ContentType ?? "application/octet-stream";
+        Snackbar.Add($"Document uploaded ({_attachmentBytes.Length / 1024}KB)", Severity.Success);
+    }
+
+    private void ClearAttachment()
+    {
+        _attachmentPreviewUrl = null;
+        _attachmentBytes = null;
+        _attachmentFileName = null;
+        _attachmentType = null;
+        _attachmentMimeType = null;
+    }
+
+    private void RemoveExistingAttachment()
+    {
+        _removeExisting = true;
+        _editProgram.AttachmentData = null;
+        _editProgram.AttachmentMimeType = null;
+        _editProgram.Attachment = null;
+        _editProgram.AttachmentType = null;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

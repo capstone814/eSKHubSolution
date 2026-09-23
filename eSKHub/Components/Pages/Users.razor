@@ -1,0 +1,678 @@
+﻿@page "/users"
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using eSKHub.Components.Dialogs
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Users</PageTitle>
+
+<style>
+    .add-user-button {
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 0px;
+    }
+
+    .desktop-table {
+        display: block;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    .user-profile-img {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    @@media (max-width: 600px) {
+        .add-user-button {
+            width: calc(50% - 4px);
+            margin-bottom: 12px;
+            margin-top: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 0px;
+        }
+
+        .desktop-table {
+            display: none;
+        }
+
+        .mobile-cards {
+            display: block;
+        }
+
+        .user-card {
+            margin-bottom: 12px;
+            border-left: 4px solid #7e6fff;
+        }
+
+        .user-card-header {
+            background-color: #7e6fff;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-right-radius: 4px;
+        }
+
+        .user-card-content {
+            padding: 16px;
+        }
+
+        .user-card-actions {
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            display: flex;
+            gap: 8px;
+            flex-wrap: nowrap;
+            justify-content: space-between;
+            padding: 10px 16px;
+        }
+
+            .user-card-actions .mud-button-root {
+                flex: 1;
+                min-width: 0;
+            }
+
+        .user-card-field-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .user-card-field-value {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .user-profile-img-mobile {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-bottom: 12px;
+        }
+
+        .user-card-header {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+        }
+
+        .user-card-content {
+            padding: 12px;
+        }
+
+        .user-card-field-label {
+            font-size: 0.75rem;
+        }
+
+        .user-card-field-value {
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+    }
+</style>
+
+<div class="button-group">
+    <MudButton Class="add-user-button"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add"
+               Color="Color.Info"
+               Size="Size.Small"
+               OnClick="OpenAddUserDialog">
+        USER
+    </MudButton>
+
+    <MudButton Class="add-user-button"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.LocationOn"
+               Color="Color.Secondary"
+               Size="Size.Small"
+               OnClick="OpenManageAreasDialog">
+        AREA
+    </MudButton>
+</div>
+
+<!-- Filter Section -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <!-- Mobile Filter Toggle Button -->
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField T="string"
+                          @bind-Value="_searchTerm"
+                          @bind-Value:after="ApplyFilters"
+                          Label="Search Users"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="Name, username, email..."
+                          Immediate="true"
+                          DebounceInterval="300"
+                          Dense="true"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_roleFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Role"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Roles</MudSelectItem>
+                <MudSelectItem Value="@("Admin")">Admin</MudSelectItem>
+                <MudSelectItem Value="@("Council")">Council</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_areaTypeFilter"
+                       @bind-Value:after="OnAreaTypeFilterChanged"
+                       Label="Area Type"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Types</MudSelectItem>
+                <MudSelectItem Value="@("Municipality")">Municipality</MudSelectItem>
+                <MudSelectItem Value="@("Barangay")">Barangay</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_specificAreaFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Specific Area"
+                       Variant="Variant.Outlined"
+                       Disabled="@(_areaTypeFilter == "All")"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Areas</MudSelectItem>
+                @foreach (var area in _availableAreas)
+                {
+                    <MudSelectItem Value="@area">@area</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Showing @_filteredUsers.Count of @_allUsers.Count users
+                </MudText>
+                @if (HasActiveFilters())
+                {
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="ClearFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<!-- Desktop Table View -->
+<div class="desktop-table">
+    <MudPaper Class="custom-paper" Elevation="1" Style="border-top: 5px solid #7e6fff; border-radius:4px;">
+        <MudTable Items="_filteredUsers" Hover="true" Bordered="true" Striped="true">
+            <HeaderContent>
+                <MudTh>No.</MudTh>
+                <MudTh>Profile</MudTh>
+                <MudTh>Full Name</MudTh>
+                <MudTh>Username</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Position</MudTh>
+                <MudTh>Governing Area</MudTh>
+                <MudTh>Role</MudTh>
+                <MudTh>Action</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="No.">@(_filteredUsers.ToList().IndexOf(context) + 1)</MudTd>
+                <MudTd DataLabel="Profile">
+                    <img src="@GetUserImagePath(context)"
+                         alt="Profile"
+                         class="user-profile-img" />
+                </MudTd>
+                <MudTd DataLabel="Full Name">@context.Fullname</MudTd>
+                <MudTd DataLabel="Username">@context.Username</MudTd>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Position">@context.Position</MudTd>
+                <MudTd DataLabel="Area">@context.Area</MudTd>
+                <MudTd DataLabel="Role">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.Role == "Admin" ? Color.Error : Color.Info)">
+                        @(context.Role ?? "User")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Action">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => EditUser(context))"
+                                   Title="Edit user" />
+
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteUser(context))"
+                                   Title="Delete user" />
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+</div>
+
+<!-- Mobile Card View -->
+<div class="mobile-cards">
+    @if (_filteredUsers.Any())
+    {
+        @for (int i = 0; i < _filteredUsers.Count; i++)
+        {
+            var user = _filteredUsers[i];
+            var index = i + 1;
+
+            <MudCard Class="user-card" Elevation="2">
+                <div class="user-card-header">
+                    <span><strong>User #@index</strong></span>
+                </div>
+                <div class="user-card-content">
+                    <div style="text-align: center;">
+                        <img src="@GetUserImagePath(user)"
+                             alt="Profile"
+                             class="user-profile-img-mobile" />
+                    </div>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Full Name:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Class="user-card-field-value">
+                        @user.Fullname
+                    </MudText>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Username:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Class="user-card-field-value">
+                        @user.Username
+                    </MudText>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Email:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Class="user-card-field-value">
+                        @user.Email
+                    </MudText>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Position:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Class="user-card-field-value">
+                        @user.Position
+                    </MudText>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Governing Area:</strong>
+                    </MudText>
+                    <MudText Typo="Typo.body1" Class="user-card-field-value">
+                        @user.Area
+                    </MudText>
+
+                    <MudText Typo="Typo.body2" Color="Color.Default" Class="user-card-field-label">
+                        <strong>Role:</strong>
+                    </MudText>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(user.Role == "Admin" ? Color.Error : Color.Info)">
+                        @(user.Role ?? "User")
+                    </MudChip>
+                </div>
+                <div class="user-card-actions">
+                    <MudIconButton Variant="Variant.Filled"
+                                   Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => EditUser(user))">
+                        Edit
+                    </MudIconButton>
+                    <MudIconButton Variant="Variant.Filled"
+                                   Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteUser(user))">
+                        Delete
+                    </MudIconButton>
+                </div>
+            </MudCard>
+        }
+    }
+    else
+    {
+        <MudCard Elevation="1" Style="padding: 15px; text-align: center;">
+            <MudText Typo="Typo.body1" Color="Color.Default">
+                @if (HasActiveFilters())
+                {
+                    <text>No users found matching your filters.</text>
+                }
+                else
+                {
+                    <text>No users found</text>
+                }
+            </MudText>
+        </MudCard>
+    }
+</div>
+
+@code {
+    private bool _showFilters = false;
+    private List<User> _allUsers = new();
+    private List<User> _filteredUsers = new();
+    private List<Area> _allAreas = new();
+    private List<string> _availableAreas = new();
+    private bool _initialized = false;
+
+    // Filter variables
+    private string _searchTerm = string.Empty;
+    private string _roleFilter = "All";
+    private string _areaTypeFilter = "All";
+    private string _specificAreaFilter = "All";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await UserState.InitializeAsync();
+
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        // Load all users
+        _allUsers = await db.Users
+            .Where(u => u.Username != UserState.Username)
+            .OrderBy(u => u.Fullname)
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Load all areas
+        _allAreas = await db.Areas
+            .OrderBy(a => a.Type)
+            .ThenBy(a => a.Name)
+            .AsNoTracking()
+            .ToListAsync();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private async Task LoadUsers()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _allUsers = await db.Users
+            .Where(u => u.Username != UserState.Username)
+            .OrderBy(u => u.Fullname)
+            .AsNoTracking()
+            .ToListAsync();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredUsers = _allUsers;
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredUsers = _filteredUsers.Where(u =>
+                (u.Fullname?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (u.Username?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (u.Email?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (u.Position?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        // Apply role filter
+        if (_roleFilter != "All")
+        {
+            _filteredUsers = _filteredUsers.Where(u => u.Role == _roleFilter).ToList();
+        }
+
+        // Apply area type filter
+        if (_areaTypeFilter != "All")
+        {
+            var areasOfType = _allAreas
+                .Where(a => a.Type == _areaTypeFilter)
+                .Select(a => a.Name)
+                .ToList();
+
+            _filteredUsers = _filteredUsers
+                .Where(u => areasOfType.Contains(u.Area))
+                .ToList();
+        }
+
+        // Apply specific area filter
+        if (_specificAreaFilter != "All")
+        {
+            _filteredUsers = _filteredUsers
+                .Where(u => u.Area == _specificAreaFilter)
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnAreaTypeFilterChanged()
+    {
+        // Reset specific area filter when area type changes
+        _specificAreaFilter = "All";
+
+        // Update available areas based on selected type
+        if (_areaTypeFilter == "All")
+        {
+            _availableAreas = new List<string>();
+        }
+        else
+        {
+            _availableAreas = _allAreas
+                .Where(a => a.Type == _areaTypeFilter)
+                .Select(a => a.Name)
+                .OrderBy(n => n)
+                .ToList();
+        }
+
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _roleFilter = "All";
+        _areaTypeFilter = "All";
+        _specificAreaFilter = "All";
+        _availableAreas = new List<string>();
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _roleFilter != "All" ||
+               _areaTypeFilter != "All" ||
+               _specificAreaFilter != "All";
+    }
+
+    private string GetUserImagePath(User user)
+    {
+        if (user.ImageData != null && !string.IsNullOrEmpty(user.ImageMimeType))
+        {
+            return $"data:{user.ImageMimeType};base64,{Convert.ToBase64String(user.ImageData)}";
+        }
+        return "/Uploads/UserImg.png";
+    }
+
+    private async Task OpenAddUserDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AddUserForm>("Add User", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadUsers();
+        }
+    }
+
+    private async Task EditUser(User user)
+    {
+        var parameters = new DialogParameters
+        {
+            { "UserToEdit", user }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<EditUserForm>("Edit User", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadUsers();
+        }
+    }
+
+    private async Task DeleteUser(User user)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete '{user.Fullname}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true,
+            FullScreen = false
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters, options);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var userToDelete = await db.Users.FindAsync(user.Id);
+
+            if (userToDelete != null)
+            {
+                if (!string.IsNullOrEmpty(userToDelete.Image))
+                {
+                    var uploadsFolder = Path.Combine(Environment.CurrentDirectory, "wwwroot", "Uploads");
+                    var filePath = Path.Combine(uploadsFolder, userToDelete.Image);
+
+                    if (File.Exists(filePath))
+                    {
+                        try
+                        {
+                            File.Delete(filePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Failed to delete image file: {ex.Message}");
+                        }
+                    }
+                }
+
+                db.Users.Remove(userToDelete);
+                await db.SaveChangesAsync();
+            }
+
+            await LoadUsers();
+        }
+    }
+
+    private async Task OpenManageAreasDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ManageAreas>("Manage Areas", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadData(); // Reload both users and areas
+        }
+    }
+}

@@ -1,0 +1,108 @@
+﻿@using eSKHub.Components.Model
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        ANNOUNCEMENT DETAILS
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3">
+            <div>
+                <MudText Typo="Typo.h4" Style="font-weight: 600; margin-bottom: 8px;">@AnnouncementToView.Subject</MudText>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                        @(AnnouncementToView.Audience == "Barangay" ? $"{AnnouncementToView.TargetBarangay}" : "Public")
+                    </MudChip>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Published on @AnnouncementToView.DateCreated.ToString("MMMM dd, yyyy 'at' hh:mm tt")
+                    </MudText>
+                </div>
+            </div>
+
+            <MudDivider />
+
+            @if (!string.IsNullOrEmpty(AnnouncementToView.ShortDescription))
+            {
+                <MudText Typo="Typo.subtitle1" Style="font-style: italic; font-weight: 500;">
+                    @AnnouncementToView.ShortDescription
+                </MudText>
+            }
+
+            @if (AnnouncementToView.AttachmentData != null && AnnouncementToView.AttachmentData.Length > 0 && AnnouncementToView.AttachmentType == "image")
+            {
+                <img src="@GetAttachmentPath()" alt="Announcement image" style="width: 100%; max-height: 400px; object-fit: cover; border-radius: 8px;" />
+            }
+
+            <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.8;">
+                @AnnouncementToView.Body
+            </MudText>
+
+            @if (AnnouncementToView.AttachmentData != null && AnnouncementToView.AttachmentData.Length > 0 && AnnouncementToView.AttachmentType != "image")
+            {
+                <div>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Download"
+                               OnClick="DownloadAttachment">
+                        Download Attachment
+                    </MudButton>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(AnnouncementToView.Author))
+            {
+                <MudDivider />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <strong>Posted by:</strong> @AnnouncementToView.Author (@AnnouncementToView.AuthorPosition - @AnnouncementToView.AuthorArea)
+                </MudText>
+            }
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Primary">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Announcement AnnouncementToView { get; set; } = default!;
+
+    [Parameter]
+    public int YouthId { get; set; }
+
+    private string GetAttachmentPath()
+    {
+        if (AnnouncementToView.AttachmentData != null && !string.IsNullOrEmpty(AnnouncementToView.AttachmentMimeType))
+        {
+            return $"data:{AnnouncementToView.AttachmentMimeType};base64,{Convert.ToBase64String(AnnouncementToView.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (AnnouncementToView.AttachmentData != null && !string.IsNullOrEmpty(AnnouncementToView.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(AnnouncementToView.AttachmentData);
+            var fileName = AnnouncementToView.Attachment ?? "announcement-document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, AnnouncementToView.AttachmentMimeType, base64);
+        }
+    }
+
+    private async Task Close()
+    {
+        // Mark announcement as closed when dialog is dismissed
+        if (YouthId > 0)
+        {
+            var announcementKey = $"youth_{YouthId}_announcement_{AnnouncementToView.Id}_closed";
+            await JS.InvokeVoidAsync("localStorage.setItem", announcementKey, "true");
+        }
+
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

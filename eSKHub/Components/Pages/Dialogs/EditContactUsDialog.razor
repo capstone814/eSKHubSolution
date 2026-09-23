@@ -1,0 +1,808 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject UserStateService UserState
+@inject eSKHub.Services.IEmailService EmailService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <!-- Contact Information Section -->
+            <MudText Typo="Typo.h6" Class="mb-3" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                Contact Information
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Phone (Main Office)"
+                                  @bind-Value="_contactPhone"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="(052) 123-4567"
+                                  Required="true"
+                                  RequiredError="Phone number is required"
+                                  Validation="@(new Func<string, string?>(ValidatePhone))"
+                                  MaxLength="20" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Mobile Number"
+                                  @bind-Value="_contactMobile"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="+63 912 345 6789"
+                                  Required="true"
+                                  RequiredError="Mobile number is required"
+                                  Validation="@(new Func<string, string?>(ValidateMobile))"
+                                  MaxLength="20" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Email (General Inquiries)"
+                                  @bind-Value="_contactEmail"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="info@eskhub-bacacay.gov.ph"
+                                  Required="true"
+                                  RequiredError="Email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  MaxLength="100" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Email (Support)"
+                                  @bind-Value="_contactSupportEmail"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="support@eskhub-bacacay.gov.ph"
+                                  Required="true"
+                                  RequiredError="Support email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  MaxLength="100" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Office Address"
+                                  @bind-Value="_contactAddress"
+                                  Lines="4"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  Placeholder="SK Federation Office&#10;Municipal Hall of Bacacay&#10;Bacacay, Albay 4510&#10;Philippines"
+                                  Required="true"
+                                  RequiredError="Office address is required"
+                                  Validation="@(new Func<string, string?>(ValidateAddress))"
+                                  MaxLength="500" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Office Hours Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                Office Hours
+            </MudText>
+
+            <MudDivider Class="mb-4" />
+
+            @foreach (var hour in _officeHours)
+            {
+                <MudGrid Class="mb-2">
+                    <MudItem xs="12" sm="5">
+                        <MudTextField T="string"
+                                      Label="Day/Period"
+                                      @bind-Value="hour.Day"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="Monday - Friday"
+                                      Required="true"
+                                      RequiredError="Day/Period is required"
+                                      MaxLength="50" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string"
+                                      Label="Time/Status"
+                                      @bind-Value="hour.Time"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="8:00 AM - 5:00 PM"
+                                      Required="true"
+                                      RequiredError="Time/Status is required"
+                                      MaxLength="100" />
+                    </MudItem>
+                    <MudItem xs="12" sm="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => RemoveOfficeHour(hour))" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Small"
+                       OnClick="AddOfficeHour"
+                       Class="mt-2"
+                       Disabled="@(_officeHours.Count >= 10)">
+                Add Office Hour
+            </MudButton>
+
+            @if (_officeHours.Count >= 10)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Warning" Class="mt-1">
+                    Maximum of 10 office hour entries allowed
+                </MudText>
+            }
+
+            <!-- Map Location Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Map" Class="mr-2" />
+                Location Map
+                <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye"
+                               Color="Color.Info"
+                               Size="Size.Small"
+                               OnClick="RequestDeveloperAccess"
+                               Disabled="@_isSendingPin"
+                               Style="margin-left: 8px;" />
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            @if (!_isDeveloperUnlocked)
+            {
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    Contact developer to enable map location editing.
+                </MudAlert>
+            }
+
+            @if (_showDeveloperPinInput)
+            {
+                <MudTextField T="string"
+                              Label="Developer PIN"
+                              @bind-Value="_enteredPin"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Placeholder="Enter 4-digit PIN"
+                              MaxLength="4"
+                              Class="mb-3"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@Icons.Material.Filled.Lock"
+                              OnAdornmentClick="VerifyDeveloperPin" />
+            }
+
+            <MudTextField T="string"
+                          Label="Google Maps Embed URL"
+                          @bind-Value="_mapEmbedUrl"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Lines="3"
+                          HelperText="Paste the full iframe src URL from Google Maps embed code"
+                          Placeholder="https://www.google.com/maps/embed?pb=..."
+                          Required="true"
+                          RequiredError="Map embed URL is required"
+                          Validation="@(new Func<string, string?>(ValidateMapUrl))"
+                          MaxLength="2000"
+                          Disabled="@(!_isDeveloperUnlocked)" />
+
+            <MudAlert Severity="Severity.Info" Class="mt-2" Dense="true">
+                To get the embed URL: Go to Google Maps → Search location → Share → Embed a map → Copy the URL inside src="..."
+            </MudAlert>
+
+            <!-- Social Media Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Share" Class="mr-2" />
+                Social Media Links
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_enableFacebook"
+                                 Label="Enable Facebook"
+                                 Color="Color.Primary" />
+                    @if (_enableFacebook)
+                    {
+                        <MudTextField T="string"
+                                      Label="Facebook URL"
+                                      @bind-Value="_facebookUrl"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="https://www.facebook.com/..."
+                                      Required="true"
+                                      RequiredError="Facebook URL is required when enabled"
+                                      Validation="@(new Func<string, string?>(ValidateFacebookUrl))"
+                                      MaxLength="500" />
+                    }
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_enableInstagram"
+                                 Label="Enable Instagram"
+                                 Color="Color.Primary" />
+                    @if (_enableInstagram)
+                    {
+                        <MudTextField T="string"
+                                      Label="Instagram URL"
+                                      @bind-Value="_instagramUrl"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="https://www.instagram.com/..."
+                                      Required="true"
+                                      RequiredError="Instagram URL is required when enabled"
+                                      Validation="@(new Func<string, string?>(ValidateInstagramUrl))"
+                                      MaxLength="500" />
+                    }
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_enableYoutube"
+                                 Label="Enable YouTube"
+                                 Color="Color.Primary" />
+                    @if (_enableYoutube)
+                    {
+                        <MudTextField T="string"
+                                      Label="YouTube URL"
+                                      @bind-Value="_youtubeUrl"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="https://www.youtube.com/..."
+                                      Required="true"
+                                      RequiredError="YouTube URL is required when enabled"
+                                      Validation="@(new Func<string, string?>(ValidateYoutubeUrl))"
+                                      MaxLength="500" />
+                    }
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_enableTwitter"
+                                 Label="Enable Twitter"
+                                 Color="Color.Primary" />
+                    @if (_enableTwitter)
+                    {
+                        <MudTextField T="string"
+                                      Label="Twitter URL"
+                                      @bind-Value="_twitterUrl"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="https://twitter.com/..."
+                                      Required="true"
+                                      RequiredError="Twitter URL is required when enabled"
+                                      Validation="@(new Func<string, string?>(ValidateTwitterUrl))"
+                                      MaxLength="500" />
+                    }
+                </MudItem>
+            </MudGrid>
+
+            <!-- Important Notes Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                Important Notes
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Important Notes Content"
+                          @bind-Value="_importantNotes"
+                          Variant="Variant.Outlined"
+                          Lines="8"
+                          Margin="Margin.Dense"
+                          HelperText="Enter each note on a new line. Use bullet points (•) if needed."
+                          Placeholder="• Please bring a valid ID when visiting our office&#10;• For urgent matters outside office hours, please send an email..."
+                          Required="true"
+                          RequiredError="Important notes are required"
+                          Validation="@(new Func<string, string?>(ValidateImportantNotes))"
+                          MaxLength="2000" />
+
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PageContent? Content { get; set; }
+
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+    private bool _isDeveloperUnlocked = false;
+    private bool _showDeveloperPinInput = false;
+    private bool _isSendingPin = false;
+    private string _generatedPin = string.Empty;
+    private string _enteredPin = string.Empty;
+
+    // Contact Information
+    private string _contactPhone = "(052) 123-4567";
+    private string _contactMobile = "+63 912 345 6789";
+    private string _contactEmail = "info@eskhub-bacacay.gov.ph";
+    private string _contactSupportEmail = "support@eskhub-bacacay.gov.ph";
+    private string _contactAddress = "SK Federation Office\nMunicipal Hall of Bacacay\nBacacay, Albay 4510\nPhilippines";
+
+    // Office Hours
+    private class OfficeHour
+    {
+        public string Day { get; set; } = "";
+        public string Time { get; set; } = "";
+    }
+
+    private List<OfficeHour> _officeHours = new()
+    {
+        new OfficeHour { Day = "Monday - Friday", Time = "8:00 AM - 5:00 PM" },
+        new OfficeHour { Day = "Saturday", Time = "8:00 AM - 12:00 PM" },
+        new OfficeHour { Day = "Sunday & Holidays", Time = "Closed" },
+        new OfficeHour { Day = "Lunch Break", Time = "12:00 PM - 1:00 PM (Monday - Friday)" }
+    };
+
+    // Map
+    private string _mapEmbedUrl = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3882.891735121838!2d123.78992487489877!3d13.294702987051142!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33a1ab5467c31be5%3A0x5523f9a1cb6e010b!2sBacacay%20Municipal%20Office%2C%20Bacacay%2C%20Albay!5e0!3m2!1sen!2sph!4v1767922594942!5m2!1sen!2sph";
+
+    // Social Media
+    private bool _enableFacebook = true;
+    private string _facebookUrl = "https://www.facebook.com/share/166ph6VzHv/";
+    private bool _enableInstagram = true;
+    private string _instagramUrl = "";
+    private bool _enableYoutube = true;
+    private string _youtubeUrl = "";
+    private bool _enableTwitter = true;
+    private string _twitterUrl = "";
+
+    // Important Notes
+    private string _importantNotes = "• Please bring a valid ID when visiting our office\n• For urgent matters outside office hours, please send an email and we will respond as soon as possible\n• Walk-in appointments are welcome, but scheduled appointments are preferred\n• Documents may take 3-5 business days to process\n• For feedback and suggestions, you can use our online feedback form available on the website";
+
+    private async Task RequestDeveloperAccess()
+    {
+        _isSendingPin = true;
+        StateHasChanged();
+
+        try
+        {
+            // Generate 4-digit PIN
+            var random = new Random();
+            _generatedPin = random.Next(1000, 9999).ToString();
+
+            // Send PIN to developer email
+            var message = new MimeKit.MimeMessage();
+            message.From.Add(new MimeKit.MailboxAddress("eSKHub System", "eskhub770@gmail.com"));
+            message.To.Add(new MimeKit.MailboxAddress("Developer", "eskhub770@gmail.com"));
+            message.Subject = "Developer Access PIN - Contact Us Page";
+
+            var bodyBuilder = new MimeKit.BodyBuilder
+            {
+                HtmlBody = $@"
+                <div style='font-family: Arial, sans-serif; padding: 20px;'>
+                    <h2>Developer Access Request</h2>
+                    <p>A developer access request has been made for the Contact Us page.</p>
+                    <p>PIN Code:</p>
+                    <h1 style='color: #7e6fff; font-size: 36px; letter-spacing: 8px;'>{_generatedPin}</h1>
+                    <p>User: {UserState.Fullname}</p>
+                    <p>Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>
+                </div>
+            "
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new MailKit.Net.Smtp.SmtpClient();
+            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync("eskhub770@gmail.com", "qiyy pnpb tkzh ipue");
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _showDeveloperPinInput = true;
+            Snackbar.Add("PIN sent to developer email", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sending PIN: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSendingPin = false;
+            StateHasChanged();
+        }
+    }
+
+    private void VerifyDeveloperPin()
+    {
+        if (_enteredPin == _generatedPin)
+        {
+            _isDeveloperUnlocked = true;
+            _showDeveloperPinInput = false;
+            Snackbar.Add("Developer access granted", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Invalid PIN", Severity.Error);
+        }
+    }
+
+    #region Validation Methods
+
+    private string? ValidatePhone(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return "Phone number is required";
+
+        if (phone.Length < 7)
+            return "Phone number is too short";
+
+        if (!Regex.IsMatch(phone, @"^[\d\s\(\)\-\+]+$"))
+            return "Invalid phone number format";
+
+        return null;
+    }
+
+    private string? ValidateMobile(string mobile)
+    {
+        if (string.IsNullOrWhiteSpace(mobile))
+            return "Mobile number is required";
+
+        if (mobile.Length < 10)
+            return "Mobile number is too short";
+
+        if (!Regex.IsMatch(mobile, @"^[\d\s\(\)\-\+]+$"))
+            return "Invalid mobile number format";
+
+        return null;
+    }
+
+    private string? ValidateEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        if (!Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            return "Invalid email format";
+
+        return null;
+    }
+
+    private string? ValidateAddress(string address)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            return "Office address is required";
+
+        if (address.Length < 10)
+            return "Address is too short (minimum 10 characters)";
+
+        return null;
+    }
+
+    private string? ValidateMapUrl(string url)
+    {
+        if (!_isDeveloperUnlocked)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(url))
+            return "Map embed URL is required";
+
+        if (!url.StartsWith("https://www.google.com/maps/embed", StringComparison.OrdinalIgnoreCase))
+            return "Invalid Google Maps embed URL. Must start with 'https://www.google.com/maps/embed'";
+
+        if (!url.Contains("pb="))
+            return "Invalid embed URL format. Please use the embed URL from Google Maps (should contain 'pb=' parameter)";
+
+        try
+        {
+            var uri = new Uri(url);
+            if (uri.Host != "www.google.com")
+                return "URL must be from www.google.com";
+        }
+        catch
+        {
+            return "Invalid URL format";
+        }
+
+        return null;
+    }
+
+    private string? ValidateFacebookUrl(string url)
+    {
+        if (!_enableFacebook)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(url))
+            return "Facebook URL is required when enabled";
+
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return "URL must start with https:// or http://";
+
+        if (!url.Contains("facebook.com", StringComparison.OrdinalIgnoreCase) &&
+            !url.Contains("fb.com", StringComparison.OrdinalIgnoreCase))
+            return "Invalid Facebook URL. Must contain 'facebook.com' or 'fb.com'";
+
+        return null;
+    }
+
+    private string? ValidateInstagramUrl(string url)
+    {
+        if (!_enableInstagram)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(url))
+            return "Instagram URL is required when enabled";
+
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return "URL must start with https:// or http://";
+
+        if (!url.Contains("instagram.com", StringComparison.OrdinalIgnoreCase))
+            return "Invalid Instagram URL. Must contain 'instagram.com'";
+
+        return null;
+    }
+
+    private string? ValidateYoutubeUrl(string url)
+    {
+        if (!_enableYoutube)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(url))
+            return "YouTube URL is required when enabled";
+
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return "URL must start with https:// or http://";
+
+        if (!url.Contains("youtube.com", StringComparison.OrdinalIgnoreCase) &&
+            !url.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+            return "Invalid YouTube URL. Must contain 'youtube.com' or 'youtu.be'";
+
+        return null;
+    }
+
+    private string? ValidateTwitterUrl(string url)
+    {
+        if (!_enableTwitter)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(url))
+            return "Twitter URL is required when enabled";
+
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            return "URL must start with https:// or http://";
+
+        if (!url.Contains("twitter.com", StringComparison.OrdinalIgnoreCase) &&
+            !url.Contains("x.com", StringComparison.OrdinalIgnoreCase))
+            return "Invalid Twitter/X URL. Must contain 'twitter.com' or 'x.com'";
+
+        return null;
+    }
+
+    private string? ValidateImportantNotes(string notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+            return "Important notes are required";
+
+        if (notes.Length < 20)
+            return "Important notes are too short (minimum 20 characters)";
+
+        return null;
+    }
+
+    private bool ValidateOfficeHours()
+    {
+        if (_officeHours.Count == 0)
+        {
+            Snackbar.Add("At least one office hour entry is required", Severity.Error);
+            return false;
+        }
+
+        foreach (var hour in _officeHours)
+        {
+            if (string.IsNullOrWhiteSpace(hour.Day) || string.IsNullOrWhiteSpace(hour.Time))
+            {
+                Snackbar.Add("All office hour entries must have both Day/Period and Time/Status filled", Severity.Error);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    #endregion
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+
+        if (Content != null)
+        {
+            LoadContactUsData(Content.Content);
+        }
+    }
+
+    private void LoadContactUsData(string jsonContent)
+    {
+        try
+        {
+            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonContent);
+            if (data != null)
+            {
+                _contactPhone = data.GetValueOrDefault("Phone", _contactPhone);
+                _contactMobile = data.GetValueOrDefault("Mobile", _contactMobile);
+                _contactEmail = data.GetValueOrDefault("Email", _contactEmail);
+                _contactSupportEmail = data.GetValueOrDefault("SupportEmail", _contactSupportEmail);
+                _contactAddress = data.GetValueOrDefault("Address", _contactAddress);
+                _mapEmbedUrl = data.GetValueOrDefault("MapEmbedUrl", _mapEmbedUrl);
+                _importantNotes = data.GetValueOrDefault("ImportantNotes", _importantNotes);
+
+                if (data.ContainsKey("OfficeHours"))
+                {
+                    var officeHoursJson = data["OfficeHours"];
+                    var loadedHours = JsonSerializer.Deserialize<List<OfficeHour>>(officeHoursJson);
+                    if (loadedHours != null && loadedHours.Any())
+                    {
+                        _officeHours = loadedHours;
+                    }
+                }
+
+                _enableFacebook = data.GetValueOrDefault("EnableFacebook", "true") == "true";
+                _facebookUrl = data.GetValueOrDefault("FacebookUrl", _facebookUrl);
+                _enableInstagram = data.GetValueOrDefault("EnableInstagram", "true") == "true";
+                _instagramUrl = data.GetValueOrDefault("InstagramUrl", _instagramUrl);
+                _enableYoutube = data.GetValueOrDefault("EnableYoutube", "true") == "true";
+                _youtubeUrl = data.GetValueOrDefault("YoutubeUrl", _youtubeUrl);
+                _enableTwitter = data.GetValueOrDefault("EnableTwitter", "true") == "true";
+                _twitterUrl = data.GetValueOrDefault("TwitterUrl", _twitterUrl);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading contact data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void AddOfficeHour()
+    {
+        if (_officeHours.Count >= 10)
+        {
+            Snackbar.Add("Maximum of 10 office hour entries allowed", Severity.Warning);
+            return;
+        }
+
+        _officeHours.Add(new OfficeHour { Day = "", Time = "" });
+    }
+
+    private void RemoveOfficeHour(OfficeHour hour)
+    {
+        if (_officeHours.Count > 1)
+        {
+            _officeHours.Remove(hour);
+        }
+        else
+        {
+            Snackbar.Add("At least one office hour entry is required", Severity.Warning);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fix validation errors before saving", Severity.Error);
+            return;
+        }
+
+        if (!ValidateOfficeHours())
+        {
+            return;
+        }
+
+        if (_enableFacebook && string.IsNullOrWhiteSpace(_facebookUrl))
+        {
+            Snackbar.Add("Facebook URL is required when Facebook is enabled", Severity.Error);
+            return;
+        }
+
+        if (_enableInstagram && string.IsNullOrWhiteSpace(_instagramUrl))
+        {
+            Snackbar.Add("Instagram URL is required when Instagram is enabled", Severity.Error);
+            return;
+        }
+
+        if (_enableYoutube && string.IsNullOrWhiteSpace(_youtubeUrl))
+        {
+            Snackbar.Add("YouTube URL is required when YouTube is enabled", Severity.Error);
+            return;
+        }
+
+        if (_enableTwitter && string.IsNullOrWhiteSpace(_twitterUrl))
+        {
+            Snackbar.Add("Twitter URL is required when Twitter is enabled", Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var contentData = new Dictionary<string, string>
+            {
+                { "Phone", _contactPhone.Trim() },
+                { "Mobile", _contactMobile.Trim() },
+                { "Email", _contactEmail.Trim() },
+                { "SupportEmail", _contactSupportEmail.Trim() },
+                { "Address", _contactAddress.Trim() },
+                { "MapEmbedUrl", _mapEmbedUrl.Trim() },
+                { "OfficeHours", JsonSerializer.Serialize(_officeHours) },
+                { "EnableFacebook", _enableFacebook.ToString().ToLower() },
+                { "FacebookUrl", _facebookUrl?.Trim() ?? "" },
+                { "EnableInstagram", _enableInstagram.ToString().ToLower() },
+                { "InstagramUrl", _instagramUrl?.Trim() ?? "" },
+                { "EnableYoutube", _enableYoutube.ToString().ToLower() },
+                { "YoutubeUrl", _youtubeUrl?.Trim() ?? "" },
+                { "EnableTwitter", _enableTwitter.ToString().ToLower() },
+                { "TwitterUrl", _twitterUrl?.Trim() ?? "" },
+                { "ImportantNotes", _importantNotes.Trim() }
+            };
+
+            var jsonContent = JsonSerializer.Serialize(contentData);
+
+            if (Content == null)
+            {
+                var newContent = new PageContent
+                {
+                    PageName = "ContactUs",
+                    Content = jsonContent,
+                    DateModified = DateTime.Now,
+                    ModifiedBy = UserState.Fullname
+                };
+                db.PageContents.Add(newContent);
+            }
+            else
+            {
+                var existingContent = await db.PageContents.FindAsync(Content.Id);
+                if (existingContent != null)
+                {
+                    existingContent.Content = jsonContent;
+                    existingContent.DateModified = DateTime.Now;
+                    existingContent.ModifiedBy = UserState.Fullname;
+                    db.PageContents.Update(existingContent);
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("Contact information saved successfully", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving content: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

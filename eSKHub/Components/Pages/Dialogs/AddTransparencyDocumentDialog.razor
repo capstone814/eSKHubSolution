@@ -1,0 +1,230 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+@inject UserStateService UserState
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        ADD TRANSPARENCY DOCUMENT
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Title"
+                                  @bind-Value="_newDocument.Title"
+                                  Required="true"
+                                  RequiredError="Title is required"
+                                  Variant="Variant.Outlined"
+                                  MaxLength="200" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudTextField T="string"
+                                  Label="Description"
+                                  @bind-Value="_newDocument.Description"
+                                  Lines="3"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Optional description of the document" />
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string"
+                               Label="Category"
+                               @bind-Value="_newDocument.Category"
+                               Required="true"
+                               RequiredError="Category is required"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Budget")">Budget Report</MudSelectItem>
+                        <MudSelectItem Value="@("Resolution")">Resolution</MudSelectItem>
+                        <MudSelectItem Value="@("Performance")">Performance</MudSelectItem>
+                        <MudSelectItem Value="@("Procurement")">Procurement</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int?"
+                                     Label="Fiscal Year"
+                                     @bind-Value="_newDocument.FiscalYear"
+                                     Variant="Variant.Outlined"
+                                     Min="2000"
+                                     Max="2100"
+                                     HelperText="e.g., 2025" />
+                </MudItem>
+
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string"
+                               Label="Quarter (Optional)"
+                               @bind-Value="_newDocument.Quarter"
+                               Variant="Variant.Outlined"
+                               Clearable="true">
+                        <MudSelectItem Value="@("Q1")">Q1 (Jan-Mar)</MudSelectItem>
+                        <MudSelectItem Value="@("Q2")">Q2 (Apr-Jun)</MudSelectItem>
+                        <MudSelectItem Value="@("Q3")">Q3 (Jul-Sep)</MudSelectItem>
+                        <MudSelectItem Value="@("Q4")">Q4 (Oct-Dec)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudCheckBox T="bool"
+                                 @bind-Value="_newDocument.IsPublished"
+                                 Label="Publish immediately"
+                                 Color="Color.Primary" />
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Upload Document (Required)</MudText>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        @if (_attachmentBytes != null)
+                        {
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <MudChip T="string" Icon="@Icons.Material.Filled.InsertDriveFile"
+                                         Color="Color.Success"
+                                         Size="Size.Large">
+                                    @_attachmentFileName (@FormatFileSize(_attachmentBytes.Length))
+                                </MudChip>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="ClearAttachment" />
+                            </div>
+                        }
+                        else
+                        {
+                            <label for="upload-transparency-doc" style="cursor: pointer; display: inline-block;">
+                                <MudPaper Class="pa-4 d-flex align-center justify-center"
+                                          Style="border: 2px dashed #7e6fff; background: transparent;"
+                                          Elevation="0">
+                                    <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
+                                             Color="Color.Primary"
+                                             Size="Size.Large" />
+                                    <MudText Typo="Typo.body2" Class="ml-2">
+                                        Click to upload document
+                                    </MudText>
+                                </MudPaper>
+                            </label>
+                        }
+
+                        <InputFile id="upload-transparency-doc"
+                                   OnChange="OnFileChanged"
+                                   accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+                                   style="display: none;" />
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Accepted: PDF, DOC, DOCX, XLS, XLSX, Images - Max 20MB
+                    </MudText>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Document</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    private TransparencyDocument _newDocument = new() { Category = "Budget" };
+    private byte[]? _attachmentBytes;
+    private string? _attachmentFileName;
+    private string? _attachmentMimeType;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in all required fields", Severity.Warning);
+            return;
+        }
+
+        if (_attachmentBytes == null)
+        {
+            Snackbar.Add("Please upload a document", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            _newDocument.FileData = _attachmentBytes;
+            _newDocument.FileMimeType = _attachmentMimeType;
+            _newDocument.FileName = _attachmentFileName;
+            _newDocument.DateUploaded = DateTime.Now;
+            _newDocument.UploadedBy = UserState.Fullname ?? "Admin";
+
+            Db.TransparencyDocuments.Add(_newDocument);
+            await Db.SaveChangesAsync();
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving document: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file.Size > 20 * 1024 * 1024)
+        {
+            Snackbar.Add("File size must be less than 20MB", Severity.Warning);
+            return;
+        }
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(20 * 1024 * 1024).CopyToAsync(ms);
+        _attachmentBytes = ms.ToArray();
+        _attachmentFileName = file.Name;
+        _attachmentMimeType = file.ContentType ?? "application/octet-stream";
+
+        Snackbar.Add($"File uploaded successfully ({FormatFileSize(_attachmentBytes.Length)})", Severity.Success);
+    }
+
+    private void ClearAttachment()
+    {
+        _attachmentBytes = null;
+        _attachmentFileName = null;
+        _attachmentMimeType = null;
+    }
+
+    private string FormatFileSize(int bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

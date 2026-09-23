@@ -1,0 +1,711 @@
+﻿@page "/council/events"
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using eSKHub.Components.Dialogs
+@layout eSKHub.Components.Layout.CouncilLayout
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Event Calendar</PageTitle>
+
+<style>
+    .calendar-container {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .calendar-main {
+        flex: 1;
+    }
+
+    .calendar-sidebar {
+        width: 350px;
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 16px;
+        background: linear-gradient(135deg, rgba(126, 111, 255, 0.1) 0%, rgba(126, 111, 255, 0.05) 100%);
+        border-radius: 8px;
+    }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+
+    .calendar-day-header {
+        text-align: center;
+        font-weight: 600;
+        padding: 12px 8px;
+        background: rgba(126, 111, 255, 0.1);
+        border-radius: 4px;
+        font-size: 0.875rem;
+    }
+
+    .calendar-day {
+        min-height: 100px;
+        padding: 8px;
+        border: 1px solid var(--mud-palette-divider);
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+        .calendar-day:hover {
+            background: rgba(126, 111, 255, 0.05);
+            border-color: #7e6fff;
+            transform: scale(1.02);
+        }
+
+        .calendar-day.today {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #667eea;
+            font-weight: 600;
+        }
+
+        .calendar-day.other-month {
+            opacity: 0.3;
+        }
+
+        .calendar-day.selected {
+            background: rgba(126, 111, 255, 0.2);
+            border-color: #7e6fff;
+            border-width: 2px;
+        }
+
+    .day-number {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .event-indicator {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        margin: 2px 0;
+        border-radius: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+        max-width: 100%;
+        display: block;
+    }
+
+    .event-list {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .event-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        border-left: 4px solid #7e6fff;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .event-item:hover {
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(126, 111, 255, 0.25);
+        }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .button-group {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+    .add-news-btn {
+        margin-top: 0px;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+    }
+
+    /* Mobile view (below 600px) */
+    @@media (max-width: 600px) {
+        .button-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .add-news-btn {
+            width: 100%;
+            margin-bottom: 0px;
+        }
+
+        .calendar-header {
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+            .calendar-header .mud-typography {
+                font-size: 1.25rem !important;
+            }
+
+        .calendar-container {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .calendar-sidebar {
+            width: 100%;
+        }
+
+        .calendar-main {
+            padding: 8px !important;
+        }
+
+        .calendar-grid {
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+
+        .calendar-day-header {
+            padding: 8px 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .calendar-day-header {
+            font-size: 0.7rem;
+        }
+
+        .calendar-day {
+            min-height: 70px;
+            padding: 4px;
+        }
+
+        .day-number {
+            font-size: 0.75rem;
+            margin-bottom: 2px;
+        }
+
+        .event-indicator {
+            font-size: 0.6rem;
+            padding: 1px 3px;
+            margin: 1px 0;
+            max-width: 100%;
+        }
+
+        .event-list {
+            max-height: 400px;
+        }
+
+        .event-item {
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+
+        .calendar-sidebar {
+            padding: 12px !important;
+        }
+
+            .calendar-sidebar .mud-typography-h6 {
+                font-size: 1rem !important;
+            }
+    }
+</style>
+
+<div class="button-group">
+    <MudButton Class="add-news-btn"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add"
+               Color="Color.Info"
+               Size="Size.Small"
+               OnClick="OpenAddEventDialog">
+        EVENT
+    </MudButton>
+</div>
+
+<!-- Filters -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_creatorFilter"
+                       @bind-Value:after="LoadEvents"
+                       Label="Created By"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Events</MudSelectItem>
+                <MudSelectItem Value="@("MyEvents")">My Events Only</MudSelectItem>
+                <MudSelectItem Value="@("Others")">Others' Events</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_eventTypeFilter"
+                       @bind-Value:after="LoadEvents"
+                       Label="Event Type"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Types</MudSelectItem>
+                <MudSelectItem Value="@("Meeting")">Meeting</MudSelectItem>
+                <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                <MudSelectItem Value="@("Community")">Community</MudSelectItem>
+                <MudSelectItem Value="@("Workshop")">Workshop</MudSelectItem>
+                <MudSelectItem Value="@("Training")">Training</MudSelectItem>
+                <MudSelectItem Value="@("Cultural")">Cultural</MudSelectItem>
+                <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_audienceFilter"
+                       @bind-Value:after="LoadEvents"
+                       Label="Audience"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Audiences</MudSelectItem>
+                <MudSelectItem Value="@("Public")">Public</MudSelectItem>
+                <MudSelectItem Value="@("OwnBarangay")">Own Barangay</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="string"
+                       @bind-Value="_publishFilter"
+                       @bind-Value:after="LoadEvents"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense"
+                       Disabled="@(_creatorFilter != "MyEvents")">
+                <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                <MudSelectItem Value="@("Published")">Published</MudSelectItem>
+                <MudSelectItem Value="@("Draft")">Draft</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            @if (HasActiveFilters())
+            {
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Clear"
+                           OnClick="ClearFilters"
+                           Style="margin-top: 4px;">
+                    Clear Filters
+                </MudButton>
+            }
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Showing @_displayEvents.Count of @_allEvents.Count events
+                @if (_creatorFilter == "MyEvents")
+                {
+                    <text> (Your events)</text>
+                }
+                else if (_creatorFilter == "Others")
+                {
+                    <text> (Others' events)</text>
+                }
+            </MudText>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<div class="calendar-container">
+    <MudPaper Class="calendar-main pa-4" Elevation="2">
+        <div class="calendar-header">
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="PreviousMonth" />
+            <MudText Typo="Typo.h5" Style="font-weight: 600;">
+                @_currentMonth.ToString("MMMM yyyy")
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.ChevronRight"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="NextMonth" />
+        </div>
+
+        <div class="calendar-grid">
+            <div class="calendar-day-header">Sun</div>
+            <div class="calendar-day-header">Mon</div>
+            <div class="calendar-day-header">Tue</div>
+            <div class="calendar-day-header">Wed</div>
+            <div class="calendar-day-header">Thu</div>
+            <div class="calendar-day-header">Fri</div>
+            <div class="calendar-day-header">Sat</div>
+
+            @foreach (var day in GetCalendarDays())
+            {
+                var dayEvents = GetEventsForDay(day);
+                var isToday = day.Date == DateTime.Today;
+                var isCurrentMonth = day.Month == _currentMonth.Month;
+                var isSelected = day.Date == _selectedDate?.Date;
+
+                <div class="calendar-day @(isToday ? "today" : "") @(!isCurrentMonth ? "other-month" : "") @(isSelected ? "selected" : "")"
+                     @onclick="@(() => SelectDay(day))">
+                    <div class="day-number">@day.Day</div>
+                    @foreach (var evt in dayEvents.Take(3))
+                    {
+                        <div class="event-indicator"
+                             style="@($"background: {GetEventTypeColor(evt.EventType)}; color: white;")"
+                             @onclick:stopPropagation="true"
+                             @onclick="@(() => ViewEventDetails(evt))">
+                            @evt.Title
+                        </div>
+                    }
+                    @if (dayEvents.Count > 3)
+                    {
+                        <div class="event-indicator" style="background: #6b7280; color: white;">
+                            +@(dayEvents.Count - 3) more
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="calendar-sidebar pa-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+            @if (_selectedDate.HasValue)
+            {
+                <text>Events on @_selectedDate.Value.ToString("MMM dd, yyyy")</text>
+            }
+            else
+            {
+                <text>All Upcoming Events</text>
+            }
+        </MudText>
+
+        <div class="event-list">
+            @if (_displayEvents.Any())
+            {
+                @foreach (var evt in _displayEvents)
+                {
+                    var isMyEvent = evt.Organizer == (UserState.Fullname ?? "");
+                    <MudPaper Class="event-item" Elevation="1" @onclick="@(() => ViewEventDetails(evt))">
+                        <MudStack Spacing="1">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <MudText Typo="Typo.subtitle2" Style="font-weight: 600;">@evt.Title</MudText>
+                                @if (isMyEvent)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Style="margin-left: 8px;">Mine</MudChip>
+                                }
+                            </div>
+                            <MudChip T="string" Size="Size.Small" Color="@GetEventTypeChipColor(evt.EventType)">
+                                @evt.EventType
+                            </MudChip>
+                            @if (!evt.IsPublished)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">Draft</MudChip>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" Style="vertical-align: middle;" />
+                                @evt.EventDate.ToString("MMM dd, yyyy")
+                                @if (evt.StartTime.HasValue)
+                                {
+                                    <text> • @evt.StartTime.Value.ToString(@"hh\:mm")</text>
+                                }
+                            </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Style="vertical-align: middle;" />
+                                @evt.Location
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                }
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    @if (HasActiveFilters())
+                    {
+                        <text>No events found matching your filters.</text>
+                    }
+                    else if (_selectedDate.HasValue)
+                    {
+                        <text>No events found for the selected date.</text>
+                    }
+                    else
+                    {
+                        <text>No upcoming events. Create your first event!</text>
+                    }
+                </MudAlert>
+            }
+        </div>
+    </MudPaper>
+</div>
+
+@code {
+    private bool _showFilters = false;
+    private List<Event> _allEvents = new();
+    private List<Event> _displayEvents = new();
+    private DateTime _currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _selectedDate;
+    private bool _initialized = false;
+
+    private string _creatorFilter = "All";
+    private string _eventTypeFilter = "All";
+    private string _audienceFilter = "All";
+    private string _publishFilter = "All";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await UserState.InitializeAsync();
+            await LoadEvents();
+        }
+    }
+
+    private async Task LoadEvents()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var currentUserName = UserState.Fullname ?? "";
+        var currentUserArea = UserState.Area ?? "";
+
+        // Start with base query
+        IQueryable<Event> query = db.Events;
+
+        // Apply creator filter first
+        if (_creatorFilter == "MyEvents")
+        {
+            // Show only my events (any status, any audience)
+            query = query.Where(e => e.Organizer == currentUserName);
+        }
+        else if (_creatorFilter == "Others")
+        {
+            // Show only others' events (published only)
+            query = query.Where(e =>
+                e.Organizer != currentUserName &&
+                e.IsPublished &&
+                (e.Audience == "Public" || (e.Audience == "Barangay" && e.TargetBarangay == currentUserArea))
+            );
+        }
+        else // "All"
+        {
+            // Show all visible events
+            query = query.Where(e =>
+                e.Organizer == currentUserName || // Own events
+                (e.IsPublished && e.Audience == "Public") || // Published public events
+                (e.IsPublished && e.Audience == "Barangay" && e.TargetBarangay == currentUserArea) // Published barangay events
+            );
+        }
+
+        // Apply event type filter
+        if (_eventTypeFilter != "All")
+        {
+            query = query.Where(e => e.EventType == _eventTypeFilter);
+        }
+
+        // Apply audience filter
+        if (_audienceFilter == "Public")
+        {
+            query = query.Where(e => e.Audience == "Public");
+        }
+        else if (_audienceFilter == "OwnBarangay")
+        {
+            query = query.Where(e => e.Audience == "Barangay" && e.TargetBarangay == currentUserArea);
+        }
+
+        // Apply publish status filter (only for "My Events")
+        if (_creatorFilter == "MyEvents")
+        {
+            if (_publishFilter == "Published")
+            {
+                query = query.Where(e => e.IsPublished);
+            }
+            else if (_publishFilter == "Draft")
+            {
+                query = query.Where(e => !e.IsPublished);
+            }
+        }
+
+        _allEvents = await query
+            .OrderBy(e => e.EventDate)
+            .AsNoTracking()
+            .ToListAsync();
+
+        UpdateDisplayEvents();
+        StateHasChanged();
+    }
+
+    private void UpdateDisplayEvents()
+    {
+        if (_selectedDate.HasValue)
+        {
+            _displayEvents = _allEvents
+                .Where(e => e.EventDate.Date == _selectedDate.Value.Date)
+                .ToList();
+        }
+        else
+        {
+            _displayEvents = _allEvents
+                .Where(e => e.EventDate >= DateTime.Today)
+                .Take(10)
+                .ToList();
+        }
+    }
+
+    private List<DateTime> GetCalendarDays()
+    {
+        var firstDayOfMonth = _currentMonth;
+        var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+
+        var startDate = firstDayOfMonth.AddDays(-(int)firstDayOfMonth.DayOfWeek);
+        var endDate = lastDayOfMonth.AddDays(6 - (int)lastDayOfMonth.DayOfWeek);
+
+        var days = new List<DateTime>();
+        for (var date = startDate; date <= endDate; date = date.AddDays(1))
+        {
+            days.Add(date);
+        }
+
+        return days;
+    }
+
+    private List<Event> GetEventsForDay(DateTime day)
+    {
+        return _allEvents.Where(e => e.EventDate.Date == day.Date).ToList();
+    }
+
+    private void SelectDay(DateTime day)
+    {
+        _selectedDate = day;
+        UpdateDisplayEvents();
+    }
+
+    private async Task PreviousMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(-1);
+        _selectedDate = null;
+        UpdateDisplayEvents();
+        await Task.CompletedTask;
+    }
+
+    private async Task NextMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(1);
+        _selectedDate = null;
+        UpdateDisplayEvents();
+        await Task.CompletedTask;
+    }
+
+    private async Task ClearFilters()
+    {
+        _creatorFilter = "All";
+        _eventTypeFilter = "All";
+        _audienceFilter = "All";
+        _publishFilter = "All";
+        await LoadEvents();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return _creatorFilter != "All" ||
+               _eventTypeFilter != "All" ||
+               _audienceFilter != "All" ||
+               (_creatorFilter == "MyEvents" && _publishFilter != "All");
+    }
+
+    private string GetEventTypeColor(string eventType) => eventType switch
+    {
+        "Meeting" => "#3b82f6",
+        "Sports" => "#10b981",
+        "Community" => "#8b5cf6",
+        "Workshop" => "#f59e0b",
+        "Training" => "#ef4444",
+        "Cultural" => "#ec4899",
+        _ => "#6b7280"
+    };
+
+    private Color GetEventTypeChipColor(string eventType) => eventType switch
+    {
+        "Meeting" => Color.Info,
+        "Sports" => Color.Success,
+        "Community" => Color.Primary,
+        "Workshop" => Color.Warning,
+        "Training" => Color.Error,
+        "Cultural" => Color.Secondary,
+        _ => Color.Default
+    };
+
+    private async Task OpenAddEventDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CouncilAddEventForm>("Create Event", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadEvents();
+            Snackbar.Add("Event created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ViewEventDetails(Event evt)
+    {
+        // Council users can only edit their own events
+        var canEdit = evt.Organizer == (UserState.Fullname ?? "");
+        var parameters = new DialogParameters
+        {
+            { "EventToView", evt },
+            { "CanEdit", canEdit }
+        };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<ViewEventDetails>("Event Details", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadEvents();
+        }
+    }
+}

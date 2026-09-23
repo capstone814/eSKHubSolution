@@ -1,0 +1,442 @@
+@page "/announcements"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject AuthService AuthService
+@inject OfflineDbService OfflineDb
+@inject NavigationManager Navigation
+
+<div class="page-container">
+    <header class="page-header">
+        <button class="back-btn" @onclick='() => Navigation.NavigateTo("/home")'>
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <h1>Announcements</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <div class="content-area">
+        @if (_isLoading)
+        {
+            <div class="shimmer-list">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="shimmer-card"></div>
+                }
+            </div>
+        }
+        else if (!_announcements.Any())
+        {
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <p>No announcements found</p>
+            </div>
+        }
+        else
+        {
+            <div class="announcements-list">
+                <Virtualize Items="_announcements" Context="announcement">
+                    <div class="announcement-card" @onclick="() => ShowDetails(announcement)">
+                        <div class="announcement-accent"></div>
+                        <div class="announcement-card-content">
+                            <div class="announcement-info">
+                                <span class="announcement-tag">Announcement</span>
+                                <h3>@announcement.Subject</h3>
+                                <p>@announcement.Body</p>
+                                <div class="announcement-meta">
+                                    <span>@announcement.DateCreated.ToString("MMM dd, yyyy")</span>
+                                    <span>•</span>
+                                    <span>By @announcement.Author</span>
+                                </div>
+                            </div>
+                            @if (announcement.AttachmentType == "image" && !string.IsNullOrEmpty(announcement.LocalPath))
+                            {
+                                <div class="announcement-image-thumb">
+                                    <LocalImage Path="@announcement.LocalPath" Alt="Thumbnail" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </Virtualize>
+            </div>
+        }
+    </div>
+
+    @if (_selectedAnnouncement != null)
+    {
+        <div class="modal-overlay" @onclick="CloseDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    @if (showImageInModal)
+                    {
+                        <div class="modal-image">
+                            <LocalImage Path="@_selectedAnnouncement?.LocalPath" Alt="Announcement Image" />
+                        </div>
+                    }
+                    <div class="modal-info">
+                        <span class="announcement-tag">Official Announcement</span>
+                        <h2>@(_selectedAnnouncement?.Subject)</h2>
+                        <div class="modal-meta">
+                            <span>By @(_selectedAnnouncement?.Author)</span>
+                            <span>•</span>
+                            <span>@(_selectedAnnouncement?.DateCreated.ToString("MMMM dd, yyyy"))</span>
+                        </div>
+                        <div class="article-content">
+                            @((MarkupString)(_selectedAnnouncement?.Body?.Replace("\n", "<br/>") ?? ""))
+                        </div>
+
+                        @if (_selectedAnnouncement?.AttachmentType != "image" && !string.IsNullOrEmpty(_selectedAnnouncement?.Attachment))
+                        {
+                            <div class="file-action-bar">
+                                <a href="@_selectedAnnouncement.Attachment" download="announcement_attachment" class="download-link-btn">
+                                    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                                    Download Attachment
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .page-container {
+        background-color: #f8f9fe;
+        min-height: 100vh;
+        color: #2d3436;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 10px 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+        .page-header h1 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+    .header-spacer {
+        width: 40px;
+    }
+
+    .back-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+
+        .back-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+    .content-area {
+        padding: 20px;
+    }
+
+    .announcements-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .announcement-card {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.06);
+        display: flex;
+        align-items: stretch;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+        .announcement-card:active {
+            transform: scale(0.98);
+        }
+
+    .announcement-accent {
+        width: 6px;
+        background: #667eea;
+        flex-shrink: 0;
+    }
+
+    .announcement-card-content {
+        flex: 1;
+        display: flex;
+        align-items: stretch;
+    }
+
+    .announcement-info {
+        padding: 16px;
+        flex: 1;
+    }
+
+    .announcement-tag {
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #3f51b5;
+        background: #e8eaf6;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-bottom: 8px;
+    }
+
+    .announcement-info h3 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 8px;
+        line-height: 1.4;
+        color: #2d3436;
+    }
+
+    .announcement-info p {
+        font-size: 11px;
+        color: #636e72;
+        line-height: 1.6;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    .announcement-meta {
+        display: flex;
+        gap: 8px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #b2bec3;
+    }
+
+    .announcement-image-thumb {
+        width: 80px;
+        background: #f1f2f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+
+        .announcement-image-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #b2bec3;
+    }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+    .shimmer-card {
+        height: 120px;
+        background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+        border-radius: 20px;
+        background-size: 200% 100%;
+        animation: shimmer 1.5s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    @@keyframes shimmer {
+        to {
+            background-position-x: -200%;
+        }
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        background: white;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        border-radius: 30px 30px 0 0;
+        position: relative;
+        overflow: hidden;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .close-modal {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+        color: #2d3436;
+    }
+
+        .close-modal svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    .modal-body {
+        overflow-y: auto;
+        max-height: 90vh;
+    }
+
+    .modal-image {
+        width: 100%;
+        max-height: 300px;
+        overflow: hidden;
+    }
+
+        .modal-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+    .modal-info {
+        padding: 24px;
+    }
+
+        .modal-info h2 {
+            font-size: 20px;
+            font-weight: 800;
+            margin: 12px 0 8px;
+            line-height: 1.3;
+            color: #2d3436;
+        }
+
+    .modal-meta {
+        display: flex;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #b2bec3;
+        margin-bottom: 20px;
+    }
+
+    .article-content {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #636e72;
+    }
+
+    .file-action-bar {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px dashed #dfe6e9;
+    }
+
+    .download-link-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #f1f2f6;
+        color: #667eea;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px dashed #667eea;
+    }
+
+        .download-link-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+</style>
+
+@code {
+    private List<OfflineAnnouncement> _announcements = new();
+    private bool _isLoading = true;
+    private OfflineAnnouncement? _selectedAnnouncement;
+    private bool showImageInModal => _selectedAnnouncement?.AttachmentType == "image" && !string.IsNullOrEmpty(_selectedAnnouncement.LocalPath);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _announcements = await OfflineDb.GetAnnouncementsAsync();
+            _announcements = _announcements.OrderByDescending(a => a.DateCreated).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading announcements: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDetails(OfflineAnnouncement announcement)
+    {
+        _selectedAnnouncement = announcement;
+        StateHasChanged();
+    }
+
+    private void CloseDetails()
+    {
+        _selectedAnnouncement = null;
+        StateHasChanged();
+    }
+}

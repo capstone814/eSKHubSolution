@@ -1,0 +1,138 @@
+﻿@using eSKHub.Components.Model
+@using System.Text.Json
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true">
+    <TitleContent>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <MudIcon Icon="@Icons.Material.Filled.BarChart" Color="Color.Info" />
+            <MudText Typo="Typo.h6">Poll Results</MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (Poll != null)
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                @Poll.Question
+            </MudText>
+
+            <div style="margin-bottom: 16px;">
+                <MudChip T="string" Size="Size.Small" Color="@(Poll.IsActive? Color.Success: Color.Default)">
+                    @(Poll.IsActive ? "Active" : "Inactive")
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                    @(Poll.Audience == "Barangay" ? $"Barangay: {Poll.TargetBarangay}" : "Public")
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                    Total Votes: @GetTotalVotes()
+                </MudChip>
+            </div>
+
+            @if (GetTotalVotes() > 0)
+            {
+                <div style="margin-top: 24px;">
+                    @foreach (var option in GetOptions())
+                    {
+                        var votes = GetVotes(option);
+                        var totalVotes = GetTotalVotes();
+                        var percentage = totalVotes > 0 ? (votes * 100.0 / totalVotes) : 0;
+
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <MudText Typo="Typo.body1" Style="font-weight: 600;">@option</MudText>
+                                <MudText Typo="Typo.body2">@votes votes (@percentage.ToString("F1")%)</MudText>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary"
+                                               Size="Size.Large"
+                                               Value="@percentage"
+                                               Style="height: 32px; border-radius: 8px;">
+                                <MudText Typo="Typo.body2" Style="color: white; font-weight: 600;">
+                                    @percentage.ToString("F1")%
+                                </MudText>
+                            </MudProgressLinear>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Style="margin-top: 16px;">
+                    No votes have been cast yet.
+                </MudAlert>
+            }
+
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mud-palette-divider);">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Created by: @Poll.CreatedBy (@Poll.CreatorArea)
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    Created on: @Poll.DateCreated.ToString("MMM dd, yyyy • hh:mm tt")
+                </MudText>
+                @if (Poll.DateExpires.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Expires: @Poll.DateExpires.Value.ToString("MMM dd, yyyy")
+                    </MudText>
+                }
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public Poll Poll { get; set; } = default!;
+
+    private List<string> GetOptions()
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(Poll.Options) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private int GetVotes(string option)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(Poll.Votes))
+                return 0;
+
+            var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(Poll.Votes);
+            return votes?.ContainsKey(option) == true ? votes[option] : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private int GetTotalVotes()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(Poll.Votes))
+                return 0;
+
+            var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(Poll.Votes);
+            return votes?.Values.Sum() ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

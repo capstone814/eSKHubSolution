@@ -1,0 +1,513 @@
+﻿@page "/login"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h1>eSKHub Mobile</h1>
+            <p>Council Portal</p>
+
+            <!-- Connection Status Indicator -->
+            <div class="connection-status">
+                <span class="@(_isOnline ? "status-dot online" : "status-dot offline")"></span>
+                <span class="status-text">@(_isOnline ? "Online" : "Offline")</span>
+            </div>
+        </div>
+
+        <div class="login-form">
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert alert-danger">
+                    <span class="alert-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="alert-icon-svg">
+                            <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    <span>@_errorMessage</span>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(_successMessage))
+            {
+                <div class="alert alert-success">
+                    <span class="alert-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="alert-icon-svg">
+                            <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    <span>@_successMessage</span>
+                </div>
+            }
+
+            @if (!_isOnline)
+            {
+                <div class="alert alert-info">
+                    <span class="alert-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="alert-icon-svg">
+                            <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    <span>Offline Mode - Cached credentials only</span>
+                </div>
+            }
+
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text"
+                       class="form-control"
+                       @bind="_username"
+                       placeholder="Enter username"
+                       disabled="@_isLoading" />
+            </div>
+
+            <div class="form-group">
+                <label>Password</label>
+                <div class="password-input">
+                    <input type="@(_showPassword ? "text" : "password")"
+                           class="form-control"
+                           @bind="_password"
+                           placeholder="Enter password"
+                           disabled="@_isLoading"
+                           @onkeypress="HandleKeyPress" />
+                    <button type="button"
+                            class="password-toggle"
+                            @onclick="TogglePasswordVisibility"
+                            disabled="@_isLoading">
+                        @if (_showPassword)
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="password-icon-svg">
+                                <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                                <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clip-rule="evenodd" />
+                            </svg>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="password-icon-svg">
+                                <path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" />
+                                <path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0115.75 12zM12.53 15.713l-4.243-4.244a3.75 3.75 0 004.244 4.243z" />
+                                <path d="M6.75 12c0-.619.107-1.215.304-1.764l-3.1-3.1a11.25 11.25 0 00-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 016.75 12z" />
+                            </svg>
+                        }
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-block"
+                    @onclick="HandleLogin"
+                    disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span class="spinner"></span>
+                    <span>@_loadingText</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* =========================================
+               Global / Reset
+               ========================================= */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    /* =========================================
+               Common Components
+               ========================================= */
+
+    /* Buttons */
+    .btn {
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(126, 111, 255, 0.4);
+        }
+
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .btn-block {
+        width: 100%;
+    }
+
+    /* Alerts */
+    .alert {
+        padding: 12px 12px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .alert-success {
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #a5d6a7;
+    }
+
+    .alert-error, .alert-danger {
+        background: #ffebee;
+        color: #c62828;
+        border: 1px solid #ef9a9a;
+    }
+
+    .alert-info {
+        background-color: #e3f2fd;
+        color: #1976d2;
+        border: 1px solid #bbdefb;
+    }
+
+    .alert-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .alert-icon-svg {
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    .password-icon-svg {
+        width: 20px;
+        height: 20px;
+        fill: #666;
+    }
+
+    /* Spinners */
+    .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid #ffffff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .spinner-small {
+        width: 12px;
+        height: 12px;
+        border: 2px solid #7e6fff;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+    }
+
+    /* =========================================
+               Login Page Specific
+               ========================================= */
+    .login-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f093fb 0%, #fadfff 50%, #764ba2 100%);
+        padding: 20px;
+    }
+
+    .login-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        max-width: 400px;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .login-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 5px 5px;
+        text-align: center;
+        position: relative;
+    }
+
+        .login-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-top: 10px;
+            margin-bottom: -5px;
+        }
+
+        .login-header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+    .connection-status {
+        position: absolute;
+        top: 58px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 6px 5px;
+        border-radius: 20px;
+        font-size: 12px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+        .status-dot.online {
+            background-color: #4caf50;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background-color: #ff9800;
+        }
+
+    .status-text {
+        font-weight: 500;
+    }
+
+    .login-form {
+        padding: 30px 20px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s;
+    }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #7e6fff;
+        }
+
+        .form-control:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+    .password-input {
+        position: relative;
+    }
+
+    .password-toggle {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 20px;
+        padding: 4px;
+    }
+
+    .sync-indicator {
+        margin-top: 16px;
+        padding: 12px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    @@media (max-width: 480px) {
+        .login-header h1 {
+            font-size: 24px;
+        }
+
+        .login-header p {
+            font-size: 14px;
+        }
+
+        .login-form {
+            padding: 20px 16px;
+        }
+
+        .connection-status {
+            font-size: 10px;
+            padding: 4px 8px;
+        }
+    }
+</style>
+
+@code {
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string _errorMessage = string.Empty;
+    private string _successMessage = string.Empty;
+    private string _loadingText = "Logging in...";
+    private bool _isLoading = false;
+    private bool _showPassword = false;
+    private bool _isOnline = true;
+
+    protected override Task OnInitializedAsync()
+    {
+        // Check if already authenticated
+        if (AuthService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/home");
+        }
+
+        // Monitor connectivity
+        _isOnline = Connectivity.Current.NetworkAccess == NetworkAccess.Internet;
+        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
+
+        return Task.CompletedTask;
+    }
+
+    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+    {
+        _isOnline = e.NetworkAccess == NetworkAccess.Internet;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleLogin()
+    {
+        _errorMessage = string.Empty;
+        _successMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Please enter username and password.";
+            return;
+        }
+
+        _isLoading = true;
+        _loadingText = _isOnline ? "Logging in..." : "Checking credentials...";
+        StateHasChanged();
+
+        try
+        {
+            var (success, message) = await AuthService.LoginAsync(_username, _password);
+
+            if (success)
+            {
+                _successMessage = message;
+
+                // Perform foreground sync if online
+                if (_isOnline)
+                {
+                    StateHasChanged();
+
+                    try
+                    {
+                        await AuthService.SyncAnnouncementsAsync();
+                    }
+                    catch (Exception syncEx)
+                    {
+                        Console.WriteLine($"[Login] Sync error: {syncEx.Message}");
+                        // We still navigate to home even if sync fails,
+                        // as authentication was successful.
+                    }
+                }
+
+                await Task.Delay(500);
+                Navigation.NavigateTo("/home");
+            }
+            else
+            {
+                _errorMessage = message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void TogglePasswordVisibility()
+    {
+        _showPassword = !_showPassword;
+    }
+
+    private Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !_isLoading)
+        {
+            return HandleLogin();
+        }
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+    }
+}

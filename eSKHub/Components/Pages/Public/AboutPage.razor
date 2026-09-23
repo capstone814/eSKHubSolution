@@ -1,0 +1,1076 @@
+﻿@page "/about"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using eSKHub.Components.Services
+@using eSKHub.Components.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ThemeService ThemeService
+@implements IDisposable
+
+<PageTitle>About Us - eSKHub Bacacay</PageTitle>
+
+<style>
+    .about-page {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .about-hero {
+        position: relative;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        color: white;
+        border-radius: 24px;
+        padding: 80px 48px;
+        margin-top: 24px;
+        margin-bottom: 48px;
+        overflow: hidden;
+    }
+
+        .about-hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+    .about-hero-content {
+        position: relative;
+        z-index: 10;
+        text-align: center;
+    }
+
+    .about-hero-logos {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 32px;
+        margin-bottom: 32px;
+    }
+
+        .about-hero-logos img {
+            width: 100px;
+            height: 100px;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+        }
+
+    .about-hero h1 {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .about-hero p {
+        font-size: 1.25rem;
+        opacity: 0.95;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .about-section {
+        margin-bottom: 64px;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 32px;
+        padding-bottom: 16px;
+        border-bottom: 3px solid;
+        border-image: linear-gradient(90deg, #667eea 0%, #764ba2 50%, transparent 100%) 1;
+    }
+
+        .section-header .mud-icon-root {
+            font-size: 2.5rem;
+        }
+
+    .section-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .content-card {
+        background: var(--mud-palette-surface);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 24px;
+        border: 1px solid var(--mud-palette-divider);
+        transition: all 0.3s ease;
+    }
+
+        .content-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.15);
+        }
+
+    .card-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: #667eea;
+    }
+
+    .card-content {
+        font-size: 1rem;
+        line-height: 1.8;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
+        margin-top: 24px;
+    }
+
+    .info-item {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-radius: 12px;
+        padding: 24px;
+        border-left: 4px solid #667eea;
+    }
+
+    .info-item-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #667eea;
+    }
+
+    .info-item-content {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .timeline {
+        position: relative;
+        padding-left: 40px;
+        margin: 32px 0;
+    }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+        }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 32px;
+        padding-left: 24px;
+    }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -36px;
+            top: 6px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #667eea;
+            border: 3px solid var(--mud-palette-background);
+        }
+
+    .timeline-date {
+        font-weight: 600;
+        color: #667eea;
+        margin-bottom: 8px;
+    }
+
+    .timeline-content {
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+
+    .leader-card {
+        text-align: center;
+        background: var(--mud-palette-surface);
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid var(--mud-palette-divider);
+        transition: all 0.3s ease;
+    }
+
+        .leader-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.15);
+        }
+
+    .leader-avatar {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        margin: 0 auto 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+
+    .leader-name {
+        font-size: 1.2rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .leader-position {
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .chapter-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+    }
+
+    .chapter-item {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+        transition: all 0.3s ease;
+    }
+
+        .chapter-item:hover {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            transform: translateY(-2px);
+        }
+
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 24px;
+        margin: 32px 0;
+    }
+
+    .stat-card {
+        text-align: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 32px 24px;
+    }
+
+    .stat-number {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .stat-label {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+
+    .partnership-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 24px;
+        margin-top: 24px;
+    }
+
+    .partnership-card {
+        background: var(--mud-palette-surface);
+        border-radius: 12px;
+        padding: 24px;
+        border: 1px solid var(--mud-palette-divider);
+    }
+
+    .partnership-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+    }
+
+        .partnership-icon .mud-icon-root {
+            color: #667eea;
+            font-size: 1.5rem;
+        }
+
+    .partnership-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .partnership-desc {
+        font-size: 0.9rem;
+        color: var(--mud-palette-text-secondary);
+        line-height: 1.6;
+    }
+
+    .achievement-card {
+        background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+        border-left: 4px solid #f59e0b;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 16px;
+    }
+
+    .achievement-year {
+        font-weight: 700;
+        color: #f59e0b;
+        margin-bottom: 8px;
+    }
+
+    .achievement-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .achievement-desc {
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
+
+    @@media (max-width: 600px) {
+        .about-hero {
+            padding: 40px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+            .about-hero h1 {
+                font-size: 1.75rem;
+            }
+
+            .about-hero p {
+                font-size: 0.95rem;
+            }
+
+        .about-hero-logos {
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+            .about-hero-logos img {
+                width: 60px;
+                height: 60px;
+            }
+
+        .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+            .section-header .mud-icon-root {
+                font-size: 2rem;
+            }
+
+        .section-title {
+            font-size: 1.5rem;
+        }
+
+        .content-card {
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+        }
+
+        .card-content {
+            font-size: 0.9rem;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .timeline {
+            padding-left: 24px;
+        }
+
+        .stats-container {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .stat-card {
+            padding: 20px 16px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+        }
+
+        .leader-avatar {
+            width: 100px;
+            height: 100px;
+            font-size: 2rem;
+        }
+
+        .chapter-list {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .partnership-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="about-page">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+        <!-- Hero Section -->
+        <div class="about-hero">
+            <div class="about-hero-content">
+                <div class="about-hero-logos">
+                    <img src="/website/SKBACACAYLOGO.png" alt="SK Logo" />
+                    <img src="/website/eskhublogo.png" alt="eSKHub Logo" style="background-color: rgba(240, 147, 251, 1); border-radius: 50px;" />
+                    <img src="/website/LGUBACACAYLOGO.png" alt="LGU Logo" />
+                </div>
+                <h1>About SK Federation Bacacay</h1>
+                <p>Empowering the youth, building tomorrow's leaders, and creating positive change in our community through innovation and service.</p>
+            </div>
+        </div>
+
+        <!-- About the SK Federation -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" />
+                <h2 class="section-title">About the SK Federation</h2>
+            </div>
+            <div class="content-card">
+                <div class="card-title">Who We Are</div>
+                <div class="card-content">
+                    @(_aboutPageData?.GetValueOrDefault("WhoWeAreDescription") ?? "The Sangguniang Kabataan (SK) Federation of Bacacay is the governing body that coordinates and represents all SK chapters across the municipality. We serve as the voice of the youth in local governance and development initiatives.")
+                </div>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-item-title">Mandate</div>
+                    <div class="info-item-content">
+                        @(_aboutPageData?.GetValueOrDefault("Mandate") ?? "To represent youth interests in local governance and ensure their active participation in community development.")
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-title">Legal Basis</div>
+                    <div class="info-item-content">
+                        @(_aboutPageData?.GetValueOrDefault("LegalBasis") ?? "Republic Act No. 10742 - Sangguniang Kabataan Reform Act of 2015")
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-title">Vision</div>
+                    <div class="info-item-content">
+                        @(_aboutPageData?.GetValueOrDefault("Vision") ?? "A generation of empowered youth leaders driving sustainable community development.")
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-title">Mission</div>
+                    <div class="info-item-content">
+                        @(_aboutPageData?.GetValueOrDefault("Mission") ?? "To develop youth leadership, promote civic engagement, and implement programs that address youth concerns.")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals and Core Values -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Flag" Color="Color.Primary" />
+                <h2 class="section-title">Goals and Core Values</h2>
+            </div>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <div class="content-card">
+                        <div class="card-title">Our Goals</div>
+                        <div class="card-content">
+                            @{
+                                var goals = ParseBulletPoints(_aboutPageData?.GetValueOrDefault("Goals", ""));
+                                if (goals.Any())
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        @foreach (var goal in goals)
+                                        {
+                                            <li>@goal.TrimStart('•', ' ')</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        <li>Foster youth leadership and civic responsibility</li>
+                                        <li>Promote education and skills development</li>
+                                        <li>Advocate for youth welfare and rights</li>
+                                        <li>Implement sustainable community programs</li>
+                                        <li>Build partnerships for youth development</li>
+                                    </ul>
+                                }
+                            }
+                        </div>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <div class="content-card">
+                        <div class="card-title">Core Values</div>
+                        <div class="card-content">
+                            @{
+                                var values = ParseBulletPoints(_aboutPageData?.GetValueOrDefault("CoreValues", ""));
+                                if (values.Any())
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        @foreach (var value in values)
+                                        {
+                                            <li>@value.TrimStart('•', ' ')</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        <li><strong>Service:</strong> Dedication to community welfare</li>
+                                        <li><strong>Integrity:</strong> Honesty and accountability</li>
+                                        <li><strong>Excellence:</strong> Commitment to quality</li>
+                                        <li><strong>Innovation:</strong> Creative problem-solving</li>
+                                        <li><strong>Unity:</strong> Collaboration and teamwork</li>
+                                    </ul>
+                                }
+                            }
+                        </div>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </div>
+
+        <!-- Organizational Background -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Primary" />
+                <h2 class="section-title">Organizational Background</h2>
+            </div>
+            <div class="content-card">
+                <div class="card-title">History of the SK Federation</div>
+                <div class="timeline">
+                    @if (_timelineItems.Any())
+                    {
+                        @foreach (var item in _timelineItems)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-date">@item.Date</div>
+                                <div class="timeline-content">@item.Description</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="timeline-item">
+                            <div class="timeline-date">1990s</div>
+                            <div class="timeline-content">Establishment of the first Sangguniang Kabataan under the Local Government Code.</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">2015</div>
+                            <div class="timeline-content">SK Reform Act (RA 10742) was enacted, modernizing SK structure and operations.</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">2018</div>
+                            <div class="timeline-content">First elections under the reformed SK system held nationwide.</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">2023</div>
+                            <div class="timeline-content">Current SK Federation term began with renewed focus on digital transformation.</div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-date">2025</div>
+                            <div class="timeline-content">Launch of eSKHub platform for enhanced youth engagement and transparency.</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- SK Federation Leaders -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" Color="Color.Primary" />
+                <h2 class="section-title">SK Federation Leaders</h2>
+            </div>
+            <MudGrid>
+                @if (_leaders.Any())
+                {
+                    @foreach (var leader in _leaders)
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <div class="leader-card">
+                                @if (!string.IsNullOrEmpty(leader.ImagePreviewUrl))
+                                {
+                                    <img src="@leader.ImagePreviewUrl"
+                                         alt="@leader.Name"
+                                         style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #667eea; margin: 0 auto 16px;" />
+                                }
+                                else
+                                {
+                                    <div class="leader-avatar">@GetInitials(leader.Name)</div>
+                                }
+                                <div class="leader-name">@leader.Name</div>
+                                <div class="leader-position">@leader.Position</div>
+                            </div>
+                        </MudItem>
+                    }
+                }
+                else
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">SK</div>
+                            <div class="leader-name">Federation President</div>
+                            <div class="leader-position">SK Federation Chairperson</div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">VP</div>
+                            <div class="leader-name">Vice President</div>
+                            <div class="leader-position">SK Federation Vice-Chairperson</div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">S</div>
+                            <div class="leader-name">Secretary</div>
+                            <div class="leader-position">SK Federation Secretary</div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">T</div>
+                            <div class="leader-name">Treasurer</div>
+                            <div class="leader-position">SK Federation Treasurer</div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">A</div>
+                            <div class="leader-name">Auditor</div>
+                            <div class="leader-position">SK Federation Auditor</div>
+                        </div>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="4">
+                        <div class="leader-card">
+                            <div class="leader-avatar">PR</div>
+                            <div class="leader-name">PRO</div>
+                            <div class="leader-position">Public Relations Officer</div>
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+        </div>
+
+        <!-- SK Network Statistics -->
+        @if (_aboutPageData != null)
+        {
+            var barangayChapters = _aboutPageData.GetValueOrDefault("BarangayChapters", "0");
+            var councilUsers = _aboutPageData.GetValueOrDefault("CouncilUsers", "0");
+            var youthRegistered = _aboutPageData.GetValueOrDefault("YouthRegistered", "0");
+
+            // Calculate barangay coverage percentage (assuming 55 total barangays in Bacacay)
+            var totalBarangays = int.TryParse(_aboutPageData.GetValueOrDefault("TotalBarangays", "56"), out var total) ? total : 56;
+            var coverage = int.TryParse(barangayChapters, out var chapters) && totalBarangays > 0
+            ? Math.Round((chapters / (double)totalBarangays) * 100, 0)
+            : 0;
+
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-number">@barangayChapters</div>
+                    <div class="stat-label">Barangay Chapters</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">@councilUsers</div>
+                    <div class="stat-label">SK Council Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">@youthRegistered</div>
+                    <div class="stat-label">Youth Registered</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">@coverage%</div>
+                    <div class="stat-label">Barangay Coverage</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Barangay Chapters</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">SK Council Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">0</div>
+                    <div class="stat-label">Youth Registered</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">0%</div>
+                    <div class="stat-label">Barangay Coverage</div>
+                </div>
+            </div>
+        }
+
+        <!-- Governance & Accountability -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Gavel" Color="Color.Primary" />
+                <h2 class="section-title">Governance & Accountability</h2>
+            </div>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <div class="content-card">
+                        <div class="card-title">Citizen's Charter</div>
+                        <div class="card-content">
+                            Our commitment to transparent, efficient, and responsive public service delivery.
+                        </div>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <div class="content-card">
+                        <div class="card-title">Policies & Resolutions</div>
+                        <div class="card-content">
+                            Legislative measures and policy frameworks guiding SK operations.
+                        </div>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <div class="content-card">
+                        <div class="card-title">Issuances</div>
+                        <div class="card-content">
+                            Official memoranda, circulars, and directives for SK implementation.
+                        </div>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </div>
+
+        <!-- Partnerships & Linkages -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Handshake" Color="Color.Primary" />
+                <h2 class="section-title">Partnerships & Linkages</h2>
+            </div>
+            <div class="partnership-grid">
+                <div class="partnership-card">
+                    <div class="partnership-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" />
+                    </div>
+                    <div class="partnership-title">National Government Agencies</div>
+                    <div class="partnership-desc">
+                        Collaboration with DILG, DSWD, DepEd, and other NGAs for youth programs.
+                    </div>
+                </div>
+                <div class="partnership-card">
+                    <div class="partnership-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.LocationCity" />
+                    </div>
+                    <div class="partnership-title">Local Government Units</div>
+                    <div class="partnership-desc">
+                        Strong partnership with Municipal and Barangay LGUs for local development.
+                    </div>
+                </div>
+                <div class="partnership-card">
+                    <div class="partnership-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Favorite" />
+                    </div>
+                    <div class="partnership-title">NGOs & Civil Society</div>
+                    <div class="partnership-desc">
+                        Working with non-profit organizations for community-based initiatives.
+                    </div>
+                </div>
+                <div class="partnership-card">
+                    <div class="partnership-icon">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" />
+                    </div>
+                    <div class="partnership-title">Private Sector</div>
+                    <div class="partnership-desc">
+                        Engaging businesses for youth employment and skills development programs.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Achievements & Recognition -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Primary" />
+                <h2 class="section-title">Achievements & Recognition</h2>
+            </div>
+            @if (_achievements.Any())
+            {
+                @foreach (var achievement in _achievements)
+                {
+                    <div class="achievement-card">
+                        <div class="achievement-year">@achievement.Year</div>
+                        <div class="achievement-title">@achievement.Title</div>
+                        <div class="achievement-desc">@achievement.Description</div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="achievement-card">
+                    <div class="achievement-year">2024</div>
+                    <div class="achievement-title">Outstanding SK Federation - Provincial Level</div>
+                    <div class="achievement-desc">
+                        Recognized for excellence in youth development programs and innovative community initiatives.
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Best Practices -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Stars" Color="Color.Primary" />
+                <h2 class="section-title">Best Practices</h2>
+            </div>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <div class="content-card">
+                        <div class="card-title">Role in Local Development</div>
+                        <div class="card-content">
+                            @{
+                                var roleItems = ParseBulletPoints(_aboutPageData?.GetValueOrDefault("RoleInLocalDevelopment", ""));
+                                if (roleItems.Any())
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        @foreach (var item in roleItems)
+                                        {
+                                            <li>@item.TrimStart('•', ' ')</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        <li>Active participation in local planning and budgeting</li>
+                                        <li>Implementation of community-based projects</li>
+                                        <li>Youth representation in development councils</li>
+                                        <li>Monitoring and evaluation of local programs</li>
+                                    </ul>
+                                }
+                            }
+                        </div>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <div class="content-card">
+                        <div class="card-title">Youth Development Framework</div>
+                        <div class="card-content">
+                            @{
+                                var frameworkItems = ParseBulletPoints(_aboutPageData?.GetValueOrDefault("YouthDevelopmentFramework", ""));
+                                if (frameworkItems.Any())
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        @foreach (var item in frameworkItems)
+                                        {
+                                            <li>@item.TrimStart('•', ' ')</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <ul style="padding-left: 20px; margin: 0;">
+                                        <li>Comprehensive leadership training programs</li>
+                                        <li>Skills development and livelihood initiatives</li>
+                                        <li>Health and wellness campaigns</li>
+                                        <li>Education and scholarship support</li>
+                                    </ul>
+                                }
+                            }
+                        </div>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </div>
+
+        <!-- Participation in Local Governance -->
+        <div class="about-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.HowToVote" Color="Color.Primary" />
+                <h2 class="section-title">Participation in Local Governance</h2>
+            </div>
+            <div class="content-card">
+                <div class="card-title">Advocacy and Representation</div>
+                <div class="card-content">
+                    @{
+                        var participationText = _aboutPageData?.GetValueOrDefault("ParticipationInGovernance",
+                        "The SK Federation actively participates in local governance through:\n\n• Representation in the Municipal Development Council\n• Active voice in the Local Youth Development Council\n• Participation in budget hearings and planning sessions\n• Advocacy for youth-friendly policies and ordinances\n• Collaboration with other local special bodies\n• Regular dialogue with community stakeholders");
+
+                        var lines = (participationText ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => l.Trim())
+                        .Where(l => !string.IsNullOrWhiteSpace(l))
+                        .ToList();
+
+                        var regularText = lines.Where(l => !l.StartsWith("•")).ToList();
+                        var bulletPoints = lines.Where(l => l.StartsWith("•")).ToList();
+                    }
+
+                    @if (regularText.Any())
+                    {
+                        @foreach (var text in regularText)
+                        {
+                            <p style="margin-bottom: 16px;">@text</p>
+                        }
+                    }
+
+                    @if (bulletPoints.Any())
+                    {
+                        <ul style="padding-left: 20px; margin: 0;">
+                            @foreach (var point in bulletPoints)
+                            {
+                                <li>@point.TrimStart('•', ' ')</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        </div>
+
+    </MudContainer>
+</div>
+
+@code {
+    private Dictionary<string, string>? _aboutPageData;
+
+    private class TimelineItem
+    {
+        public string Id { get; set; } = "";
+        public string Date { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private class Leader
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Position { get; set; } = "";
+        public byte[]? ImageData { get; set; }
+        public string? ImageMimeType { get; set; }
+        public string? ImagePreviewUrl { get; set; }
+    }
+
+    private class Achievement
+    {
+        public string Year { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private List<TimelineItem> _timelineItems = new();
+    private List<Leader> _leaders = new();
+    private List<Achievement> _achievements = new();
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return parts[0][0].ToString().ToUpper();
+    }
+
+    private string[] ParseBulletPoints(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return Array.Empty<string>();
+        return text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToArray();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeService.OnThemeChanged += StateHasChanged;
+        await LoadAboutPageData();
+    }
+
+    private async Task LoadAboutPageData()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var content = await db.PageContents
+                .FirstOrDefaultAsync(p => p.PageName == "AboutPage");
+
+            if (content != null)
+            {
+                _aboutPageData = JsonSerializer.Deserialize<Dictionary<string, string>>(content.Content);
+
+                // Parse timeline
+                if (_aboutPageData?.ContainsKey("Timeline") == true)
+                {
+                    var timelineJson = _aboutPageData["Timeline"];
+                    _timelineItems = JsonSerializer.Deserialize<List<TimelineItem>>(timelineJson) ?? new();
+                }
+
+                // Parse leaders
+                if (_aboutPageData?.ContainsKey("Leaders") == true)
+                {
+                    var leadersJson = _aboutPageData["Leaders"];
+                    _leaders = JsonSerializer.Deserialize<List<Leader>>(leadersJson) ?? new();
+
+                    // Restore image previews
+                    foreach (var leader in _leaders)
+                    {
+                        if (leader.ImageData != null && !string.IsNullOrEmpty(leader.ImageMimeType))
+                        {
+                            leader.ImagePreviewUrl = $"data:{leader.ImageMimeType};base64,{Convert.ToBase64String(leader.ImageData)}";
+                        }
+                    }
+                }
+
+                // Parse achievements
+                if (_aboutPageData?.ContainsKey("Achievements") == true)
+                {
+                    var achievementsJson = _aboutPageData["Achievements"];
+                    _achievements = JsonSerializer.Deserialize<List<Achievement>>(achievementsJson) ?? new();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading about page data: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+}

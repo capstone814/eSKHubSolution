@@ -1,0 +1,431 @@
+﻿@using eSKHub.Components.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using eSKHub.Components.Services
+@using Blazored.SessionStorage
+@inject UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject ISessionStorageService SessionStorage
+
+<style>
+    .poll-option {
+        padding: 16px;
+        border: 2px solid rgba(126, 111, 255, 0.3);
+        border-radius: 8px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .poll-option:hover {
+            background: rgba(126, 111, 255, 0.05);
+            border-color: rgba(126, 111, 255, 0.5);
+        }
+
+        .poll-option.selected {
+            background: rgba(126, 111, 255, 0.1);
+            border-color: #7e6fff;
+        }
+
+        .poll-option.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .poll-results {
+        margin-top: 24px;
+    }
+
+    .result-bar {
+        height: 40px;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        color: white;
+        font-weight: 600;
+        margin-bottom: 8px;
+        transition: width 0.3s ease;
+    }
+</style>
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <MudIcon Icon="@Icons.Material.Filled.HowToVote" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Community Polls</MudText>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div style="display: flex; justify-content: center; padding: 40px;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (_polls.Any())
+        {
+            @foreach (var poll in _polls)
+            {
+                <MudPaper Class="pa-4 mb-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Style="margin-bottom: 16px; font-weight: 600;">
+                        @poll.Question
+                    </MudText>
+
+                    @if (!HasUserVoted(poll.Id))
+                    {
+                        @foreach (var option in GetOptions(poll))
+                        {
+                            <div class="poll-option @(_selectedOptions.ContainsKey(poll.Id) && _selectedOptions[poll.Id] == option ? "selected" : "")"
+                                 @onclick="@(() => SelectOption(poll.Id, option))">
+                                <MudText Typo="Typo.body1">@option</MudText>
+                            </div>
+                        }
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   OnClick="@(() => SubmitVote(poll))"
+                                   Disabled="@(!_selectedOptions.ContainsKey(poll.Id) || _isSubmitting)"
+                                   Style="margin-top: 16px;">
+                            @if (_isSubmitting)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Submitting...</span>
+                            }
+                            else
+                            {
+                                <span>Submit Vote</span>
+                            }
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                            You have already voted on this poll. Thank you for your participation!
+                        </MudAlert>
+
+                        <div class="poll-results">
+                            <MudText Typo="Typo.subtitle2" Style="margin-bottom: 12px; font-weight: 600;">
+                                Results:
+                            </MudText>
+                            @foreach (var option in GetOptions(poll))
+                            {
+                                var votes = GetVotes(poll, option);
+                                var totalVotes = GetTotalVotes(poll);
+                                var percentage = totalVotes > 0 ? (votes * 100.0 / totalVotes) : 0;
+
+                                <div style="margin-bottom: 12px;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <MudText Typo="Typo.body2">@option</MudText>
+                                        <MudText Typo="Typo.body2">@votes votes (@percentage.ToString("F1")%)</MudText>
+                                    </div>
+                                    <div class="result-bar" style="width: @percentage%">
+                                        @if (percentage > 0)
+                                        {
+                                            <span>@percentage.ToString("F1")%</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 8px;">
+                                Total votes: @GetTotalVotes(poll)
+                            </MudText>
+                        </div>
+                    }
+
+                    @if (poll.DateExpires.HasValue)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 12px;">
+                            Expires: @poll.DateExpires.Value.ToString("MMM dd, yyyy")
+                        </MudText>
+                    }
+                </MudPaper>
+            }
+        }
+        else
+        {
+            <div style="text-align: center; padding: 40px;">
+                <MudIcon Icon="@Icons.Material.Filled.Poll" Size="Size.Large" Color="Color.Secondary" Style="opacity: 0.5; margin-bottom: 16px;" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary">No Active Polls</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Check back later for community polls and surveys.</MudText>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="CloseAndRefresh">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<Poll> _polls = new();
+    private Dictionary<int, string> _selectedOptions = new();
+    private HashSet<int> _votedPollIds = new();
+    private bool _isLoading = true;
+    private bool _isSubmitting = false;
+    private string _currentUserId = string.Empty;
+    private bool _hasVotedInSession = false;
+    private bool _isYouthUser = false; // ✅ Track if this is a youth user
+
+    private void CloseAndRefresh()
+    {
+        MudDialog.Close(DialogResult.Ok(_hasVotedInSession));
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        _currentUserId = UserState.Username ?? "";
+
+        // ✅ Check if this is a youth user
+        _isYouthUser = !string.IsNullOrEmpty(_currentUserId) && _currentUserId.StartsWith("youth_");
+
+        await LoadVotedPolls();
+        await LoadActivePolls();
+    }
+
+    private async Task LoadVotedPolls()
+    {
+        try
+        {
+            if (_isYouthUser)
+            {
+                // ✅ For youth users, load voted polls from database
+                using var db = await DbFactory.CreateDbContextAsync();
+                var allPolls = await db.Polls.AsNoTracking().ToListAsync();
+
+                foreach (var poll in allPolls)
+                {
+                    if (!string.IsNullOrEmpty(poll.VoterIds))
+                    {
+                        try
+                        {
+                            var voterIds = JsonSerializer.Deserialize<List<string>>(poll.VoterIds) ?? new List<string>();
+                            if (voterIds.Contains(_currentUserId))
+                            {
+                                _votedPollIds.Add(poll.Id);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            else
+            {
+                // ✅ For public users, use consistent session storage key
+                var votedPolls = await SessionStorage.GetItemAsync<List<int>>("voted_polls_public");
+                if (votedPolls != null)
+                {
+                    _votedPollIds = new HashSet<int>(votedPolls);
+                }
+            }
+        }
+        catch
+        {
+            _votedPollIds = new HashSet<int>();
+        }
+    }
+
+    private async Task SaveVotedPoll(int pollId)
+    {
+        try
+        {
+            _votedPollIds.Add(pollId);
+
+            // ✅ Only save to session storage for public users with consistent key
+            if (!_isYouthUser)
+            {
+                await SessionStorage.SetItemAsync("voted_polls_public", _votedPollIds.ToList());
+            }
+            // Youth users don't need session storage since we read from database
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving voted poll: {ex.Message}");
+        }
+    }
+
+    private bool HasUserVoted(int pollId)
+    {
+        return _votedPollIds.Contains(pollId);
+    }
+
+    private async Task LoadActivePolls()
+    {
+        _isLoading = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // Get youth's barangay from UserState
+            var youthBarangay = UserState.Area ?? "";
+
+            _polls = await db.Polls
+                .Where(p => p.IsActive &&
+                           (!p.DateExpires.HasValue || p.DateExpires.Value > DateTime.Now) &&
+                           (p.Audience == "Public" ||
+                            (p.Audience == "Barangay" && p.TargetBarangay == youthBarangay)))
+                .OrderByDescending(p => p.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading polls: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private List<string> GetOptions(Poll poll)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(poll.Options) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private void SelectOption(int pollId, string option)
+    {
+        if (!HasUserVoted(pollId))
+        {
+            _selectedOptions[pollId] = option;
+        }
+    }
+
+    private async Task SubmitVote(Poll poll)
+    {
+        if (!_selectedOptions.ContainsKey(poll.Id))
+            return;
+
+        if (HasUserVoted(poll.Id))
+        {
+            Snackbar.Add("You have already voted on this poll.", Severity.Warning);
+            return;
+        }
+
+        _isSubmitting = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var pollInDb = await db.Polls.FindAsync(poll.Id);
+
+            if (pollInDb != null)
+            {
+                var selectedOption = _selectedOptions[poll.Id];
+
+                List<string> voterIds;
+                if (string.IsNullOrEmpty(pollInDb.VoterIds))
+                {
+                    voterIds = new List<string>();
+                }
+                else
+                {
+                    voterIds = JsonSerializer.Deserialize<List<string>>(pollInDb.VoterIds)
+                        ?? new List<string>();
+                }
+
+                if (voterIds.Contains(_currentUserId))
+                {
+                    Snackbar.Add("You have already voted on this poll.", Severity.Warning);
+                    await SaveVotedPoll(poll.Id);
+                    return;
+                }
+
+                voterIds.Add(_currentUserId);
+                pollInDb.VoterIds = JsonSerializer.Serialize(voterIds);
+
+                Dictionary<string, int> votes;
+                if (string.IsNullOrEmpty(pollInDb.Votes))
+                {
+                    votes = new Dictionary<string, int>();
+                }
+                else
+                {
+                    votes = JsonSerializer.Deserialize<Dictionary<string, int>>(pollInDb.Votes)
+                        ?? new Dictionary<string, int>();
+                }
+
+                if (votes.ContainsKey(selectedOption))
+                {
+                    votes[selectedOption]++;
+                }
+                else
+                {
+                    votes[selectedOption] = 1;
+                }
+
+                pollInDb.Votes = JsonSerializer.Serialize(votes);
+                await db.SaveChangesAsync();
+
+                await SaveVotedPoll(poll.Id);
+
+                poll.Votes = pollInDb.Votes;
+                poll.VoterIds = pollInDb.VoterIds;
+
+                _hasVotedInSession = true; // ✅ Track that user voted
+
+                Snackbar.Add("Thank you for voting!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error submitting vote: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+            await LoadActivePolls();
+            StateHasChanged();
+        }
+    }
+
+    private int GetVotes(Poll poll, string option)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(poll.Votes))
+                return 0;
+
+            var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes);
+            return votes?.ContainsKey(option) == true ? votes[option] : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private int GetTotalVotes(Poll poll)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(poll.Votes))
+                return 0;
+
+            var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes);
+            return votes?.Values.Sum() ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(false));
+}

@@ -1,0 +1,142 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Forward this feedback to barangay councils:
+        </MudText>
+
+        <MudSelect T="string"
+                   Label="Select Barangays"
+                   MultiSelection="true"
+                   @bind-SelectedValues="_selectedBarangays"
+                   Variant="Variant.Outlined"
+                   Required="true"
+                   RequiredError="Please select at least one barangay"
+                   AdornmentIcon="@Icons.Material.Filled.LocationOn"
+                   AdornmentColor="Color.Primary">
+            @foreach (var barangay in _barangays)
+            {
+                <MudSelectItem T="string" Value="@barangay">@barangay</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+            <strong>Feedback from:</strong> @Feedback.Name (@Feedback.Email)
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            <strong>Subject:</strong> @Feedback.Subject
+        </MudText>
+
+        @if (Feedback.IsForwarded)
+        {
+            var forwardedTo = Feedback.GetForwardedBarangays();
+            if (forwardedTo.Any())
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                    Currently forwarded to: <strong>@string.Join(", ", forwardedTo)</strong>
+                </MudAlert>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Forward"
+                   Disabled="@(!_selectedBarangays.Any() || _isForwarding)">
+            @if (_isForwarding)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <text>Forwarding...</text>
+            }
+            else
+            {
+                <text>Forward</text>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Feedback Feedback { get; set; } = default!;
+
+    private IEnumerable<string> _selectedBarangays = new HashSet<string>();
+    private List<string> _barangays = new();
+    private bool _isForwarding = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _barangays = await db.Areas
+            .Where(a => a.Type == "Barangay")
+            .Select(a => a.Name)
+            .OrderBy(n => n)
+            .ToListAsync();
+    }
+
+    private async Task Forward()
+    {
+        if (!_selectedBarangays.Any())
+        {
+            Snackbar.Add("Please select at least one barangay", Severity.Warning);
+            return;
+        }
+
+        _isForwarding = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var feedbackToForward = await db.Feedbacks
+                .Where(f => f.Id == Feedback.Id)
+                .FirstOrDefaultAsync();
+
+            if (feedbackToForward != null)
+            {
+                // Reset solved status for any barangay being re-forwarded
+                foreach (var barangay in _selectedBarangays)
+                {
+                    if (feedbackToForward.IsSolvedForBarangay(barangay))
+                    {
+                        feedbackToForward.ResetSolvedStatusForBarangay(barangay);
+                    }
+                }
+
+                // Add new barangays to the forwarded list
+                feedbackToForward.AddForwardedBarangays(_selectedBarangays.ToList());
+                feedbackToForward.ForwardedDate = DateTime.Now;
+
+                var changes = await db.SaveChangesAsync();
+
+                if (changes > 0)
+                {
+                    Snackbar.Add($"Feedback forwarded to {_selectedBarangays.Count()} barangay(s)", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("No changes were saved", Severity.Warning);
+                    _isForwarding = false;
+                }
+            }
+            else
+            {
+                Snackbar.Add("Feedback not found", Severity.Error);
+                MudDialog.Close(DialogResult.Cancel());
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error forwarding feedback: {ex.Message}", Severity.Error);
+            Console.WriteLine($"Forward error: {ex}");
+            _isForwarding = false;
+        }
+    }
+    private void Cancel() => MudDialog.Cancel();
+}

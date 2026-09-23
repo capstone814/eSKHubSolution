@@ -1,0 +1,625 @@
+﻿@using eSKHub.Components.Dialogs
+@using eSKHub.Components.Pages.Dialogs
+@using Microsoft.EntityFrameworkCore
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject eSKHub.Components.Services.ThemeService ThemeService
+@inject eSKHub.Components.Services.ChatService ChatService
+@inject IDialogService DialogService
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@implements IDisposable
+
+<style>
+    .responsive-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        z-index: -1;
+        transition: background-image 0.5s ease-in-out;
+    }
+
+    .light-bg {
+        background-image: url('mainbg/mainbglight.png');
+    }
+
+    .dark-bg {
+        background-image: url('mainbg/mainbgdark.png');
+    }
+
+    .council-appbar-light {
+        background: rgba(240, 147, 251, 0.5) !important;
+        backdrop-filter: blur(7px);
+        border-bottom: none !important;
+    }
+
+    .council-appbar-dark {
+        background: rgba(30, 30, 45, 0.5) !important;
+        backdrop-filter: blur(7px);
+        border-bottom: none !important;
+    }
+
+    .top-logo-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .sk-logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .sk-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    .logo-text h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    .logo-text p {
+        font-size: 0.875rem;
+        opacity: 0.7;
+        margin: 0;
+    }
+
+    .custom-paper {
+        transition: border-left 0.1s ease-in-out;
+    }
+
+        .custom-paper:hover {
+            border-left: 3px solid #7e6fff;
+        }
+
+    .desktop-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .desktop-drawer {
+        display: block;
+    }
+
+    .mobile-menu-toggle {
+        display: none;
+    }
+
+    .mobile-drawer {
+        display: none;
+    }
+
+    @@media (max-width: 600px) {
+        .council-appbar-light, .council-appbar-dark {
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        .sk-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+        }
+
+        .logo-text h1 {
+            font-size: 1.3rem;
+        }
+
+        .logo-text p {
+            font-size: 0.65rem;
+        }
+
+        .top-logo-section {
+            gap: 6px;
+        }
+
+        .user-profile-section {
+            gap: 4px !important;
+        }
+
+            .user-profile-section img {
+                width: 25px !important;
+                height: 25px !important;
+            }
+
+            .user-profile-section .mud-typography {
+                display: none !important;
+            }
+
+        .mud-appbar .mud-icon-button {
+            padding: 8px !important;
+        }
+
+            .mud-appbar .mud-icon-button svg {
+                width: 20px !important;
+                height: 20px !important;
+            }
+
+        .desktop-nav {
+            display: none !important;
+        }
+
+        .desktop-drawer {
+            display: none !important;
+        }
+
+        .mobile-menu-toggle {
+            display: flex !important;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .mobile-drawer {
+            display: block !important;
+            max-width: 250px !important;
+        }
+    }
+
+    .chat-button-fixed {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        z-index: 1000;
+    }
+
+    .chat-button {
+        background-color: var(--mud-palette-primary) !important;
+        color: var(--mud-palette-primary-text) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transition: transform 0.2s;
+    }
+
+        .chat-button:hover {
+            transform: scale(1.1);
+        }
+</style>
+
+<div class="responsive-bg @(ThemeService.IsDarkMode ? "dark-bg" : "light-bg")"></div>
+
+<MudThemeProvider Theme="@_theme" IsDarkMode="ThemeService.IsDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Class="@(ThemeService.IsDarkMode ? "council-appbar-dark" : "council-appbar-light")">
+        <div class="desktop-nav">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           Edge="Edge.Start"
+                           OnClick="@((e) => DrawerToggle())" />
+        </div>
+
+        <div class="top-logo-section" style="cursor: default;">
+            <div class="sk-logo">
+                <img src="website/eskhublogo.png" />
+            </div>
+            <div class="logo-text">
+                <h1>eSKHub Bacacay</h1>
+                <p>Council Portal</p>
+            </div>
+        </div>
+
+        <MudSpacer />
+
+        <div class="desktop-nav">
+            @if (!string.IsNullOrEmpty(_userImagePath))
+            {
+                <div class="d-flex align-center mr-2 user-profile-section" style="gap: 8px;">
+                    <img src="@_userImagePath"
+                         alt="User Profile"
+                         style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; cursor: pointer;"
+                         @onclick="OpenProfilePreviewDialog" />
+                    <MudText Typo="Typo.subtitle2">@UserState.Username</MudText>
+                </div>
+            }
+
+            <MudIconButton Icon="@DarkLightModeButtonIcon"
+                           Color="Color.Inherit"
+                           OnClick="@DarkModeToggle" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Logout"
+                           Color="Color.Inherit"
+                           Edge="Edge.End"
+                           OnClick="Logout" />
+        </div>
+
+        <div class="mobile-menu-toggle">
+            @if (!string.IsNullOrEmpty(_userImagePath))
+            {
+                <img src="@_userImagePath"
+                     alt="User Profile"
+                     style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; cursor: pointer;"
+                     @onclick="OpenProfilePreviewDialog" />
+            }
+            <MudIconButton Icon="@DarkLightModeButtonIcon"
+                           Color="Color.Inherit"
+                           OnClick="@DarkModeToggle" />
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           OnClick="@ToggleMobileDrawer" />
+        </div>
+    </MudAppBar>
+
+    <MudDrawer id="nav-drawer"
+               @bind-Open="_drawerOpen"
+               ClipMode="DrawerClipMode.Always"
+               Elevation="2"
+               Class="desktop-drawer">
+        <CouncilNavMenu />
+        <MudDivider Class="my-2" />
+        <MudNavLink OnClick="@(async () => await OpenUpdateAccountDialog())"
+                    Icon="@Icons.Material.Outlined.ManageAccounts">
+            Update Account
+        </MudNavLink>
+    </MudDrawer>
+
+    <MudDrawer @bind-Open="_mobileDrawerOpen"
+               Anchor="Anchor.Right"
+               Elevation="2"
+               Variant="DrawerVariant.Temporary"
+               Class="mobile-drawer">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Menu</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavLink Href="/council/home" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Dashboard" OnClick="@CloseMobileDrawer">
+                Dashboard
+            </MudNavLink>
+            <MudNavLink Href="/council/youth-constituents" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.ChildCare" OnClick="@CloseMobileDrawer">
+                Youth Constituents
+            </MudNavLink>
+            <MudNavGroup Title="Share Information"
+                         Icon="@Icons.Material.Filled.Language"
+                         Expanded="false">
+                <MudNavLink Href="/council/announcements"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Campaign"
+                            OnClick="@CloseMobileDrawer">
+                    Announcements
+                </MudNavLink>
+                <MudNavLink Href="/council/news"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Article"
+                            OnClick="@CloseMobileDrawer">
+                    News Articles
+                </MudNavLink>
+            </MudNavGroup>
+            <MudNavGroup Title="Propose Initiatives"
+                         Icon="@Icons.Material.Filled.Lightbulb"
+                         Expanded="false">
+                <MudNavLink Href="/council/programs-projects"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Work"
+                            OnClick="@CloseMobileDrawer">
+                    Programs & Projects
+                </MudNavLink>
+                <MudNavLink Href="/council/events"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.CalendarMonth"
+                            OnClick="@CloseMobileDrawer">
+                    Event Calendar
+                </MudNavLink>
+            </MudNavGroup>
+            <MudNavLink Href="/council/feedbacks-manage"
+                        Match="NavLinkMatch.All"
+                        Icon="@Icons.Material.Filled.Feedback"
+                        OnClick="@CloseMobileDrawer">
+                Feedbacks
+            </MudNavLink>
+            <MudNavLink Href="/council/polls"
+                        Match="NavLinkMatch.All"
+                        Icon="@Icons.Material.Filled.HowToVote"
+                        OnClick="@CloseMobileDrawer">
+                Polls & Surveys
+            </MudNavLink>
+
+            <MudDivider Class="my-2" Style="border-color: var(--mud-palette-secondary); border-width: 1px;" />
+
+            <MudNavLink OnClick="@(async () => { await OpenUpdateAccountDialog(); CloseMobileDrawer(); })"
+                        Icon="@Icons.Material.Outlined.ManageAccounts">
+                Update Account
+            </MudNavLink>
+
+            <MudNavLink OnClick="@LogoutAndClose"
+                        Icon="@Icons.Material.Outlined.Logout">
+                Sign Out
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pt-16 pa-4">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+<div class="chat-button-fixed">
+    <MudBadge Content="@(_totalUnreadCount > 0 ? _totalUnreadCount : null)"
+              Color="Color.Error"
+              Overlap="true"
+              Visible="@(_totalUnreadCount > 0)"
+              AnchorOrigin="Origin.TopRight">
+        <MudTooltip Text="Open Chat" Placement="Placement.Left">
+            <MudIconButton Icon="@Icons.Material.Filled.Chat"
+                           OnClick="@OpenChatDialog"
+                           Size="Size.Large"
+                           Class="chat-button rounded-circle" />
+        </MudTooltip>
+    </MudBadge>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _mobileDrawerOpen = false;
+    private MudTheme? _theme = null;
+    private bool _initialized = false;
+    private string? _userImagePath;
+    private int _totalUnreadCount;
+    private System.Timers.Timer? _unreadTimer;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _theme = new()
+        {
+            PaletteLight = _lightPalette,
+            PaletteDark = _darkPalette,
+            LayoutProperties = new LayoutProperties()
+        };
+
+        ThemeService.OnThemeChanged += OnThemeChanged;
+        NavigationManager.LocationChanged += OnLocationChanged;
+
+        _unreadTimer = new System.Timers.Timer(5000);
+        _unreadTimer.Elapsed += async (s, e) => await InvokeAsync(RefreshUnreadCount);
+        _unreadTimer.Start();
+    }
+
+    private async Task RefreshUnreadCount()
+    {
+        if (UserState.Username != null)
+        {
+            _totalUnreadCount = await ChatService.GetTotalUnreadCountAsync(UserState.Username);
+            StateHasChanged();
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _mobileDrawerOpen = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+
+            await ThemeService.InitializeAsync();
+
+            await UserState.InitializeAsync();
+
+            if (!UserState.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+            if (currentUser == null)
+            {
+                await UserState.Logout();
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            if (currentUser.Role == "Admin")
+            {
+                NavigationManager.NavigateTo("/", forceLoad: true);
+                return;
+            }
+
+            _userImagePath = currentUser.ImageData != null && !string.IsNullOrEmpty(currentUser.ImageMimeType)
+                ? $"data:{currentUser.ImageMimeType};base64,{Convert.ToBase64String(currentUser.ImageData)}"
+                : "/Uploads/UserImg.png";
+
+            StateHasChanged();
+        }
+    }
+
+    private void OnThemeChanged()
+    {
+        StateHasChanged();
+    }
+
+    private void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task DarkModeToggle()
+    {
+        await ThemeService.ToggleDarkModeAsync();
+    }
+
+    private async Task Logout()
+    {
+        await UserState.Logout();
+        NavigationManager.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void ToggleMobileDrawer()
+    {
+        _mobileDrawerOpen = !_mobileDrawerOpen;
+    }
+
+    private void CloseMobileDrawer()
+    {
+        _mobileDrawerOpen = false;
+    }
+
+    private async Task LogoutAndClose()
+    {
+        CloseMobileDrawer();
+        await Logout();
+    }
+
+    private async Task OpenChatDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        await DialogService.ShowAsync<ChatDialog>("Chat", options);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        _unreadTimer?.Stop();
+        _unreadTimer?.Dispose();
+    }
+
+    private readonly PaletteLight _lightPalette = new()
+    {
+        Black = "#110e2d",
+        AppbarText = "#424242",
+        AppbarBackground = "rgba(255,255,255,0.8)",
+        DrawerBackground = "#FFCCFF",
+        GrayLight = "#e8e8e8",
+        GrayLighter = "#f9f9f9",
+        Background = "#FFCCFF"
+    };
+
+    private readonly PaletteDark _darkPalette = new()
+    {
+        Primary = "#7e6fff",
+        Surface = "#1e1e2d",
+        Background = "#1a1a27",
+        BackgroundGray = "#151521",
+        AppbarText = "#92929f",
+        AppbarBackground = "rgba(26,26,39,0.8)",
+        DrawerBackground = "#1a1a27",
+        ActionDefault = "#74718e",
+        ActionDisabled = "#9999994d",
+        ActionDisabledBackground = "#605f6d4d",
+        TextPrimary = "#b2b0bf",
+        TextSecondary = "#92929f",
+        TextDisabled = "#ffffff33",
+        DrawerIcon = "#92929f",
+        DrawerText = "#92929f",
+        GrayLight = "#2a2833",
+        GrayLighter = "#1e1e2d",
+        Info = "#4a86ff",
+        Success = "#3dcb6c",
+        Warning = "#ffb545",
+        Error = "#ff3f5f",
+        LinesDefault = "#33323e",
+        TableLines = "#33323e",
+        Divider = "#292838",
+        OverlayLight = "#1e1e2d80",
+    };
+
+    public string DarkLightModeButtonIcon => ThemeService.IsDarkMode
+        ? Icons.Material.Rounded.AutoMode
+        : Icons.Material.Outlined.DarkMode;
+
+    private IDialogReference? _updateDialogRef;
+
+    private async Task OpenUpdateAccountDialog()
+    {
+        if (_updateDialogRef is not null)
+        {
+            _updateDialogRef.Close();
+            _updateDialogRef = null;
+            StateHasChanged();
+            return;
+        }
+
+        using var db = await DbFactory.CreateDbContextAsync();
+        var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+        if (currentUser is null)
+            return;
+
+        var parameters = new DialogParameters
+        {
+            { "UserToEdit", currentUser }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        _updateDialogRef = await DialogService.ShowAsync<UpdateAccountForm>("Update Account", parameters, options);
+        var result = await _updateDialogRef.Result;
+
+        _updateDialogRef = null;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var dbRefresh = await DbFactory.CreateDbContextAsync();
+            var updatedUser = await dbRefresh.Users.FirstOrDefaultAsync(u => u.Id == currentUser.Id);
+            if (updatedUser != null)
+            {
+                await UserState.SetUsername(updatedUser.Username);
+
+                _userImagePath = updatedUser.ImageData != null && !string.IsNullOrEmpty(updatedUser.ImageMimeType)
+                    ? $"data:{updatedUser.ImageMimeType};base64,{Convert.ToBase64String(updatedUser.ImageData)}"
+                    : "/Uploads/UserImg.png";
+
+                StateHasChanged();
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task OpenProfilePreviewDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "ImagePath", _userImagePath },
+            { "Username", UserState.Username }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = false,
+            MaxWidth = MaxWidth.ExtraSmall,
+            NoHeader = true,
+            Position = DialogPosition.Center,
+            BackdropClick = true,
+            FullWidth = false,
+        };
+
+        await DialogService.ShowAsync<UserProfilePreview>("", parameters, options);
+    }
+}

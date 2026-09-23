@@ -1,0 +1,839 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Formats.Png
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject UserStateService UserState
+
+<MudDialog MaxWidth="MaxWidth.Large">
+    <DialogContent>
+        <MudForm @ref="_form">
+            <!-- About the SK Federation Section -->
+            <MudText Typo="Typo.h6" Class="mb-3" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                About the SK Federation
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Who We Are - Main Description"
+                          @bind-Value="_whoWeAreDescription"
+                          Variant="Variant.Outlined"
+                          Lines="4"
+                          Margin="Margin.Dense"
+                          Required="true"
+                          RequiredError="Description is required"
+                          MaxLength="1000" />
+
+            <MudGrid Class="mt-3">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Mandate"
+                                  @bind-Value="_mandate"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  RequiredError="Mandate is required"
+                                  MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Legal Basis"
+                                  @bind-Value="_legalBasis"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  RequiredError="Legal basis is required"
+                                  MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Vision"
+                                  @bind-Value="_vision"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  RequiredError="Vision is required"
+                                  MaxLength="500" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Mission"
+                                  @bind-Value="_mission"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  Margin="Margin.Dense"
+                                  Required="true"
+                                  RequiredError="Mission is required"
+                                  MaxLength="500" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Goals and Core Values Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Flag" Class="mr-2" />
+                Goals and Core Values
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Our Goals"
+                                  @bind-Value="_goals"
+                                  Variant="Variant.Outlined"
+                                  Lines="8"
+                                  Margin="Margin.Dense"
+                                  HelperText="Use bullet points (•) for each goal"
+                                  Required="true"
+                                  RequiredError="Goals are required"
+                                  MaxLength="1000" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Core Values"
+                                  @bind-Value="_coreValues"
+                                  Variant="Variant.Outlined"
+                                  Lines="8"
+                                  Margin="Margin.Dense"
+                                  HelperText="Use bullet points (•) for each value"
+                                  Required="true"
+                                  RequiredError="Core values are required"
+                                  MaxLength="1000" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Organizational Background Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+                Organizational Background (Timeline)
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            @foreach (var item in _timeline)
+            {
+                <MudGrid Class="mb-2">
+                    <MudItem xs="12" sm="3">
+                        <MudTextField T="string"
+                                      Label="Date/Year"
+                                      @bind-Value="item.Date"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="2024"
+                                      MaxLength="50" />
+                    </MudItem>
+                    <MudItem xs="12" sm="8">
+                        <MudTextField T="string"
+                                      Label="Description"
+                                      @bind-Value="item.Description"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="2"
+                                      Placeholder="Event description..."
+                                      MaxLength="500" />
+                    </MudItem>
+                    <MudItem xs="12" sm="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="MudBlazor.Color.Error"
+                                       Size="MudBlazor.Size.Small"
+                                       OnClick="@(() => RemoveTimelineItem(item))" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="MudBlazor.Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="MudBlazor.Size.Small"
+                       OnClick="AddTimelineItem"
+                       Class="mt-2"
+                       Disabled="@(_timeline.Count >= 15)">
+                Add Timeline Item
+            </MudButton>
+
+            @if (_timeline.Count >= 15)
+            {
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Warning" Class="mt-1">
+                    Maximum of 15 timeline items allowed
+                </MudText>
+            }
+
+            <!-- SK Federation Leaders Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" Class="mr-2" />
+                SK Federation Leaders
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            @foreach (var leader in _leaders)
+            {
+                <div class="mb-4 pa-4" style="border: 1px solid #e0e0e0; border-radius: 8px;">
+                    <MudGrid>
+                        <MudItem xs="12" Class="d-flex justify-center mb-3">
+                            @if (!string.IsNullOrEmpty(leader.ImagePreviewUrl))
+                            {
+                                <div style="position: relative;">
+                                    <label for="@($"upload-leader-{leader.Id}")" style="position: absolute; top: 5px; right: 5px; z-index: 2; cursor: pointer; background: white; border-radius: 50%; padding: 4px;">
+                                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Small" />
+                                    </label>
+                                    <img src="@leader.ImagePreviewUrl"
+                                         alt="@leader.Name"
+                                         style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid #667eea;" />
+                                </div>
+                            }
+                            else
+                            {
+                                <label for="upload-leader-@leader.Id" style="cursor: pointer; display: flex; flex-direction: column; align-items: center;">
+                                    <div style="width: 120px; height: 120px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 700; border: 3px solid #667eea;">
+                                        @GetInitials(leader.Name)
+                                    </div>
+                                    <MudText Typo="Typo.caption" Class="mt-2">Click to upload</MudText>
+                                </label>
+                            }
+                            <InputFile id="@($"upload-leader-{leader.Id}")"
+                                       OnChange="@(e => OnLeaderImageChanged(e, leader))"
+                                       accept="image/*"
+                                       style="display: none;" />
+                        </MudItem>
+
+                        <MudItem xs="12" sm="5">
+                            <MudTextField T="string"
+                                          Label="Name"
+                                          @bind-Value="leader.Name"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Placeholder="Juan Dela Cruz"
+                                          MaxLength="100" />
+                        </MudItem>
+                        <MudItem xs="12" sm="5">
+                            <MudTextField T="string"
+                                          Label="Position"
+                                          @bind-Value="leader.Position"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Placeholder="SK Federation Chairperson"
+                                          MaxLength="100" />
+                        </MudItem>
+                        <MudItem xs="12" sm="2" Class="d-flex align-center justify-center">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="MudBlazor.Color.Error"
+                                           Size="MudBlazor.Size.Small"
+                                           OnClick="@(() => RemoveLeader(leader))" />
+                        </MudItem>
+                    </MudGrid>
+                </div>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="MudBlazor.Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="MudBlazor.Size.Small"
+                       OnClick="AddLeader"
+                       Class="mt-2"
+                       Disabled="@(_leaders.Count >= 10)">
+                Add Leader
+            </MudButton>
+
+            @if (_leaders.Count >= 10)
+            {
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Warning" Class="mt-1">
+                    Maximum of 10 leaders allowed
+                </MudText>
+            }
+
+            <!-- SK Network Statistics (Auto-calculated) -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-2" />
+                SK Network Statistics
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                Statistics are automatically calculated from registered areas in the system.
+            </MudAlert>
+
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string"
+                                  Label="Barangay Chapters"
+                                  Value="@_barangayChapters.ToString()"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  ReadOnly="true"
+                                  Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string"
+                                  Label="SK Council Users"
+                                  Value="@_councilUsers.ToString()"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  ReadOnly="true"
+                                  Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string"
+                                  Label="Youth Registered"
+                                  Value="@_totalYouthCount.ToString()"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  ReadOnly="true"
+                                  Disabled="true" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTextField T="string"
+                                  Label="Barangay Coverage (%)"
+                                  Value="@(Math.Round((_barangayChapters / 56.0) * 100, 0).ToString())"
+                                  Variant="Variant.Outlined"
+                                  Margin="Margin.Dense"
+                                  ReadOnly="true"
+                                  Disabled="true" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Achievements & Recognition Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Class="mr-2" />
+                Achievements & Recognition
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            @foreach (var achievement in _achievements)
+            {
+                <MudGrid Class="mb-2">
+                    <MudItem xs="12" sm="2">
+                        <MudTextField T="string"
+                                      Label="Year"
+                                      @bind-Value="achievement.Year"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="2024"
+                                      MaxLength="10" />
+                    </MudItem>
+                    <MudItem xs="12" sm="9">
+                        <MudTextField T="string"
+                                      Label="Achievement Title"
+                                      @bind-Value="achievement.Title"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Placeholder="Outstanding SK Federation"
+                                      MaxLength="200" />
+                    </MudItem>
+                    <MudItem xs="12" sm="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="MudBlazor.Color.Error"
+                                       Size="MudBlazor.Size.Small"
+                                       OnClick="@(() => RemoveAchievement(achievement))" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField T="string"
+                                      Label="Description"
+                                      @bind-Value="achievement.Description"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Lines="2"
+                                      Placeholder="Brief description of the achievement..."
+                                      MaxLength="500" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       Color="MudBlazor.Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="MudBlazor.Size.Small"
+                       OnClick="AddAchievement"
+                       Class="mt-2"
+                       Disabled="@(_achievements.Count >= 15)">
+                Add Achievement
+            </MudButton>
+
+            @if (_achievements.Count >= 15)
+            {
+                <MudText Typo="Typo.caption" Color="MudBlazor.Color.Warning" Class="mt-1">
+                    Maximum of 15 achievements allowed
+                </MudText>
+            }
+
+            <!-- Best Practices Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.Stars" Class="mr-2" />
+                Best Practices
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Role in Local Development"
+                                  @bind-Value="_roleInLocalDevelopment"
+                                  Variant="Variant.Outlined"
+                                  Lines="8"
+                                  Margin="Margin.Dense"
+                                  HelperText="Use bullet points (•) for each item"
+                                  Required="true"
+                                  RequiredError="This section is required"
+                                  MaxLength="1000" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Youth Development Framework"
+                                  @bind-Value="_youthDevelopmentFramework"
+                                  Variant="Variant.Outlined"
+                                  Lines="8"
+                                  Margin="Margin.Dense"
+                                  HelperText="Use bullet points (•) for each item"
+                                  Required="true"
+                                  RequiredError="This section is required"
+                                  MaxLength="1000" />
+                </MudItem>
+            </MudGrid>
+
+            <!-- Participation in Local Governance Section -->
+            <MudText Typo="Typo.h6" Class="mb-3 mt-6" Style="color: #667eea; display: flex; align-items: center;">
+                <MudIcon Icon="@Icons.Material.Filled.HowToVote" Class="mr-2" />
+                Participation in Local Governance
+            </MudText>
+            <MudDivider Class="mb-4" />
+
+            <MudTextField T="string"
+                          Label="Advocacy and Representation Content"
+                          @bind-Value="_participationInGovernance"
+                          Variant="Variant.Outlined"
+                          Lines="10"
+                          Margin="Margin.Dense"
+                          HelperText="Use bullet points (•) for lists"
+                          Required="true"
+                          RequiredError="This section is required"
+                          MaxLength="2000" />
+
+            <MudAlert Severity="Severity.Info" Class="mt-4" Dense="true">
+                Changes will be reflected on the About page immediately after saving.
+            </MudAlert>
+
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="MudBlazor.Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="MudBlazor.Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PageContent? Content { get; set; }
+
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    private int _councilUsers = 0;
+    private int _totalYouthCount = 0;
+
+    // About SK Federation
+    private string _whoWeAreDescription = "The Sangguniang Kabataan (SK) Federation of Bacacay is the governing body that coordinates and represents all SK chapters across the municipality. We serve as the voice of the youth in local governance and development initiatives.";
+    private string _mandate = "To represent youth interests in local governance and ensure their active participation in community development.";
+    private string _legalBasis = "Republic Act No. 10742 - Sangguniang Kabataan Reform Act of 2015";
+    private string _vision = "A generation of empowered youth leaders driving sustainable community development.";
+    private string _mission = "To develop youth leadership, promote civic engagement, and implement programs that address youth concerns.";
+
+    // Goals and Core Values
+    private string _goals = "• Foster youth leadership and civic responsibility\n• Promote education and skills development\n• Advocate for youth welfare and rights\n• Implement sustainable community programs\n• Build partnerships for youth development";
+    private string _coreValues = "• Service: Dedication to community welfare\n• Integrity: Honesty and accountability\n• Excellence: Commitment to quality\n• Innovation: Creative problem-solving\n• Unity: Collaboration and teamwork";
+
+    // Timeline
+    private class TimelineItem
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Date { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private List<TimelineItem> _timeline = new()
+    {
+        new TimelineItem { Date = "1990s", Description = "Establishment of the first Sangguniang Kabataan under the Local Government Code." },
+        new TimelineItem { Date = "2015", Description = "SK Reform Act (RA 10742) was enacted, modernizing SK structure and operations." },
+        new TimelineItem { Date = "2018", Description = "First elections under the reformed SK system held nationwide." },
+        new TimelineItem { Date = "2023", Description = "Current SK Federation term began with renewed focus on digital transformation." },
+        new TimelineItem { Date = "2025", Description = "Launch of eSKHub platform for enhanced youth engagement and transparency." }
+    };
+
+    // Leaders
+    private class Leader
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Name { get; set; } = "";
+        public string Position { get; set; } = "";
+        public byte[]? ImageData { get; set; }
+        public string? ImageMimeType { get; set; }
+        public string? ImagePreviewUrl { get; set; }
+    }
+
+    private List<Leader> _leaders = new()
+    {
+        new Leader { Name = "Federation President", Position = "SK Federation Chairperson" },
+        new Leader { Name = "Vice President", Position = "SK Federation Vice-Chairperson" },
+        new Leader { Name = "Secretary", Position = "SK Federation Secretary" },
+        new Leader { Name = "Treasurer", Position = "SK Federation Treasurer" },
+        new Leader { Name = "Auditor", Position = "SK Federation Auditor" },
+        new Leader { Name = "PRO", Position = "Public Relations Officer" }
+    };
+
+    // Statistics (Auto-populated)
+    private int _barangayChapters = 0;
+
+    // Achievements
+    private class Achievement
+    {
+        public string Year { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    private List<Achievement> _achievements = new()
+    {
+        new Achievement { Year = "2024", Title = "Outstanding SK Federation - Provincial Level", Description = "Recognized for excellence in youth development programs and innovative community initiatives." }
+    };
+
+    // Best Practices
+    private string _roleInLocalDevelopment = "• Active participation in local planning and budgeting\n• Implementation of community-based projects\n• Youth representation in development councils\n• Monitoring and evaluation of local programs";
+    private string _youthDevelopmentFramework = "• Comprehensive leadership training programs\n• Skills development and livelihood initiatives\n• Health and wellness campaigns\n• Education and scholarship support";
+
+    // Participation in Local Governance
+    private string _participationInGovernance = "The SK Federation actively participates in local governance through:\n\n• Representation in the Municipal Development Council\n• Active voice in the Local Youth Development Council\n• Participation in budget hearings and planning sessions\n• Advocacy for youth-friendly policies and ordinances\n• Collaboration with other local special bodies\n• Regular dialogue with community stakeholders";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        await LoadBarangayCount();
+
+        if (Content != null)
+        {
+            LoadAboutPageData(Content.Content);
+        }
+    }
+
+    private async Task LoadBarangayCount()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            // Count barangay chapters
+            _barangayChapters = await db.Areas.CountAsync(a => a.Type == "Barangay");
+
+            // Count active youth
+            _totalYouthCount = await db.Youths.CountAsync(y => y.Status == "Active");
+
+            // Count council users (non-admin users)
+            _councilUsers = await db.Users.CountAsync(u => u.Role != "Admin");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading counts: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void LoadAboutPageData(string jsonContent)
+    {
+        try
+        {
+            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonContent);
+            if (data != null)
+            {
+                // About SK Federation
+                _whoWeAreDescription = data.GetValueOrDefault("WhoWeAreDescription", _whoWeAreDescription);
+                _mandate = data.GetValueOrDefault("Mandate", _mandate);
+                _legalBasis = data.GetValueOrDefault("LegalBasis", _legalBasis);
+                _vision = data.GetValueOrDefault("Vision", _vision);
+                _mission = data.GetValueOrDefault("Mission", _mission);
+
+                // Goals and Core Values
+                _goals = data.GetValueOrDefault("Goals", _goals);
+                _coreValues = data.GetValueOrDefault("CoreValues", _coreValues);
+
+                // Timeline
+                if (data.ContainsKey("Timeline"))
+                {
+                    var timelineJson = data["Timeline"];
+                    var loadedTimeline = JsonSerializer.Deserialize<List<TimelineItem>>(timelineJson);
+                    if (loadedTimeline != null && loadedTimeline.Any())
+                    {
+                        _timeline = loadedTimeline;
+                    }
+                }
+
+                // Leaders
+                if (data.ContainsKey("Leaders"))
+                {
+                    var leadersJson = data["Leaders"];
+                    var loadedLeaders = JsonSerializer.Deserialize<List<Leader>>(leadersJson);
+                    if (loadedLeaders != null && loadedLeaders.Any())
+                    {
+                        _leaders = loadedLeaders;
+                        // Restore image previews
+                        foreach (var leader in _leaders)
+                        {
+                            if (leader.ImageData != null && !string.IsNullOrEmpty(leader.ImageMimeType))
+                            {
+                                leader.ImagePreviewUrl = $"data:{leader.ImageMimeType};base64,{Convert.ToBase64String(leader.ImageData)}";
+                            }
+                        }
+                    }
+                }
+
+                // Statistics
+                if (data.ContainsKey("CouncilUsers") && int.TryParse(data["CouncilUsers"], out var councilUsers))
+                    _councilUsers = councilUsers;
+                if (data.ContainsKey("YouthRegistered") && int.TryParse(data["YouthRegistered"], out var youthRegistered))
+                    _totalYouthCount = youthRegistered;
+
+                // Achievements
+                if (data.ContainsKey("Achievements"))
+                {
+                    var achievementsJson = data["Achievements"];
+                    var loadedAchievements = JsonSerializer.Deserialize<List<Achievement>>(achievementsJson);
+                    if (loadedAchievements != null && loadedAchievements.Any())
+                    {
+                        _achievements = loadedAchievements;
+                    }
+                }
+
+                // Best Practices
+                _roleInLocalDevelopment = data.GetValueOrDefault("RoleInLocalDevelopment", _roleInLocalDevelopment);
+                _youthDevelopmentFramework = data.GetValueOrDefault("YouthDevelopmentFramework", _youthDevelopmentFramework);
+
+                // Participation in Local Governance
+                _participationInGovernance = data.GetValueOrDefault("ParticipationInGovernance", _participationInGovernance);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading about page data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[1][0]}".ToUpper();
+        return parts[0][0].ToString().ToUpper();
+    }
+
+    private async Task OnLeaderImageChanged(InputFileChangeEventArgs e, Leader leader)
+    {
+        var file = e.File;
+
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("Image size must be less than 5MB", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var inputStream = file.OpenReadStream(5 * 1024 * 1024);
+            using var image = await Image.LoadAsync(inputStream);
+
+            // Resize to 300x300 max
+            image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+            {
+                Size = new SixLabors.ImageSharp.Size(300, 300),
+                Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
+            }));
+
+            using var ms = new MemoryStream();
+
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            bool isPng = extension == ".png";
+
+            if (isPng)
+            {
+                var encoder = new PngEncoder { CompressionLevel = PngCompressionLevel.BestCompression };
+                await image.SaveAsync(ms, encoder);
+                leader.ImageMimeType = "image/png";
+            }
+            else
+            {
+                var encoder = new JpegEncoder { Quality = 70 };
+                await image.SaveAsync(ms, encoder);
+                leader.ImageMimeType = "image/jpeg";
+            }
+
+            leader.ImageData = ms.ToArray();
+            leader.ImagePreviewUrl = $"data:{leader.ImageMimeType};base64,{Convert.ToBase64String(leader.ImageData)}";
+
+            Snackbar.Add($"Image uploaded for {leader.Name} ({leader.ImageData.Length / 1024}KB)", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error processing image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void AddTimelineItem()
+    {
+        if (_timeline.Count >= 15)
+        {
+            Snackbar.Add("Maximum of 15 timeline items allowed", Severity.Warning);
+            return;
+        }
+        _timeline.Add(new TimelineItem());
+    }
+
+    private void RemoveTimelineItem(TimelineItem item)
+    {
+        if (_timeline.Count > 1)
+        {
+            _timeline.Remove(item);
+        }
+        else
+        {
+            Snackbar.Add("At least one timeline item is required", Severity.Warning);
+        }
+    }
+
+    private void AddLeader()
+    {
+        if (_leaders.Count >= 10)
+        {
+            Snackbar.Add("Maximum of 10 leaders allowed", Severity.Warning);
+            return;
+        }
+        _leaders.Add(new Leader());
+    }
+
+    private void RemoveLeader(Leader leader)
+    {
+        if (_leaders.Count > 1)
+        {
+            _leaders.Remove(leader);
+        }
+        else
+        {
+            Snackbar.Add("At least one leader is required", Severity.Warning);
+        }
+    }
+
+    private void AddAchievement()
+    {
+        if (_achievements.Count >= 15)
+        {
+            Snackbar.Add("Maximum of 15 achievements allowed", Severity.Warning);
+            return;
+        }
+        _achievements.Add(new Achievement());
+    }
+
+    private void RemoveAchievement(Achievement achievement)
+    {
+        if (_achievements.Count > 1)
+        {
+            _achievements.Remove(achievement);
+        }
+        else
+        {
+            Snackbar.Add("At least one achievement is required", Severity.Warning);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fix validation errors before saving", Severity.Error);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var contentData = new Dictionary<string, string>
+            {
+                { "WhoWeAreDescription", _whoWeAreDescription.Trim() },
+                { "Mandate", _mandate.Trim() },
+                { "LegalBasis", _legalBasis.Trim() },
+                { "Vision", _vision.Trim() },
+                { "Mission", _mission.Trim() },
+                { "Goals", _goals.Trim() },
+                { "CoreValues", _coreValues.Trim() },
+                { "Timeline", JsonSerializer.Serialize(_timeline) },
+                { "Leaders", JsonSerializer.Serialize(_leaders) },
+                { "BarangayChapters", _barangayChapters.ToString() },
+                { "TotalBarangays", "56" },
+                { "CouncilUsers", _councilUsers.ToString() },
+                { "YouthRegistered", _totalYouthCount.ToString() },
+                { "Achievements", JsonSerializer.Serialize(_achievements) },
+                { "RoleInLocalDevelopment", _roleInLocalDevelopment.Trim() },
+                { "YouthDevelopmentFramework", _youthDevelopmentFramework.Trim() },
+                { "ParticipationInGovernance", _participationInGovernance.Trim() }
+            };
+
+            var jsonContent = JsonSerializer.Serialize(contentData);
+
+            if (Content == null)
+            {
+                var newContent = new PageContent
+                {
+                    PageName = "AboutPage",
+                    Content = jsonContent,
+                    DateModified = DateTime.Now,
+                    ModifiedBy = UserState.Fullname
+                };
+                db.PageContents.Add(newContent);
+            }
+            else
+            {
+                var existingContent = await db.PageContents.FindAsync(Content.Id);
+                if (existingContent != null)
+                {
+                    existingContent.Content = jsonContent;
+                    existingContent.DateModified = DateTime.Now;
+                    existingContent.ModifiedBy = UserState.Fullname;
+                    db.PageContents.Update(existingContent);
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("About page information saved successfully", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving content: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

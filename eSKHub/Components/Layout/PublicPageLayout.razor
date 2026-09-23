@@ -1,0 +1,516 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject eSKHub.Components.Services.ThemeService ThemeService
+@implements IDisposable
+
+<div class="public-page-layout">
+<div class="responsive-bg @(ThemeService.IsDarkMode ? "dark-bg" : "light-bg")"></div>
+
+<MudThemeProvider Theme="@_theme" IsDarkMode="ThemeService.IsDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="0" class="@(ThemeService.IsDarkMode ? "public-appbar-dark" : "public-appbar-light")">
+
+            <!-- Top Logo Section -->
+            <div class="top-logo-section" style="cursor: pointer;" @onclick="@(() => NavigationManager.NavigateTo("/"))">
+                <div class="sk-logo">
+                    <img src="website/eskhublogo.png" />
+                </div>
+                <div class="logo-text">
+                    <h1>eSKHub Bacacay</h1>
+                    <p>Empowering Youth, Building Tomorrow</p>
+                </div>
+            </div>
+
+        <!-- Desktop Navigation -->
+        <div class="desktop-nav ml-6">
+            <MudButton Href="/"
+                       Variant="Variant.Text"
+                       Color="Color.Inherit"
+                       Class="nav-link">
+                Home
+            </MudButton>
+
+            @if (IsAnnouncementsPage)
+            {
+                <MudButton OnClick="@(() => ScrollToSection("programs"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Programs
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("events"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Events
+                </MudButton>
+                <div class="custom-dropdown-wrapper">
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link"
+                               EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                               @onclick="ToggleDropdown">
+                        What's New
+                    </MudButton>
+
+                    @if (_isDropdownOpen)
+                    {
+                        <div class="@(ThemeService.IsDarkMode ? "custom-dropdown-menu-dark" : "custom-dropdown-menu-light")">
+                            <div class="custom-dropdown-item" @onclick="@(() => { ScrollToSection("news"); CloseDropdown(); })">
+                                <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" />
+                                <span>News Articles</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <MudButton OnClick="@(() => ScrollToSection("transparency"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Transparency
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("get-involved"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Get Involved
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("contact"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Contact
+                </MudButton>
+                <MudButton Href="/about"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    About
+                    </MudButton>
+                }
+                else if (IsNewsArticlesPage)
+                {
+                    <MudButton OnClick="@(() => ScrollToSection("programs"))"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        Programs
+                    </MudButton>
+                    <MudButton OnClick="@(() => ScrollToSection("events"))"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        Events
+                    </MudButton>
+                    <div class="custom-dropdown-wrapper">
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Inherit"
+                                   Class="nav-link"
+                                   EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                                   @onclick="ToggleDropdown">
+                            What's New
+                        </MudButton>
+
+                        @if (_isDropdownOpen)
+                        {
+                            <div class="@(ThemeService.IsDarkMode ? "custom-dropdown-menu-dark" : "custom-dropdown-menu-light")">
+                                <div class="custom-dropdown-item" @onclick="@(() => { ScrollToSection("announcements"); CloseDropdown(); })">
+                                    <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Small" />
+                                    <span>Announcements</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <MudButton OnClick="@(() => ScrollToSection("transparency"))"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        Transparency
+                    </MudButton>
+                    <MudButton OnClick="@(() => ScrollToSection("get-involved"))"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        Get Involved
+                    </MudButton>
+                    <MudButton OnClick="@(() => ScrollToSection("contact"))"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        Contact
+                    </MudButton>
+                    <MudButton Href="/about"
+                               Variant="Variant.Text"
+                               Color="Color.Inherit"
+                               Class="nav-link">
+                        About
+                    </MudButton>
+                }
+                else
+            {
+                <MudButton OnClick="@(() => ScrollToSection("programs"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Programs
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("events"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Events
+                </MudButton>
+                    <div class="custom-dropdown-wrapper">
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Inherit"
+                                   Class="nav-link"
+                                   EndIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                                   @onclick="ToggleDropdown">
+                            What's New
+                        </MudButton>
+
+                        @if (_isDropdownOpen)
+                        {
+                            <div class="@(ThemeService.IsDarkMode ? "custom-dropdown-menu-dark" : "custom-dropdown-menu-light")">
+                                <div class="custom-dropdown-item" @onclick="@(() => { ScrollToSection("announcements"); CloseDropdown(); })">
+                                    <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Small" />
+                                    <span>Announcements</span>
+                                </div>
+                                <div class="custom-dropdown-item" @onclick="@(() => { ScrollToSection("news"); CloseDropdown(); })">
+                                    <MudIcon Icon="@Icons.Material.Filled.Article" Size="Size.Small" />
+                                    <span>News Articles</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                <MudButton OnClick="@(() => ScrollToSection("transparency"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Transparency
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("get-involved"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Get Involved
+                </MudButton>
+                <MudButton OnClick="@(() => ScrollToSection("contact"))"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    Contact
+                </MudButton>
+                <MudButton Href="/about"
+                           Variant="Variant.Text"
+                           Color="Color.Inherit"
+                           Class="nav-link">
+                    About
+                </MudButton>
+            }
+        </div>
+
+        <MudSpacer />
+
+        <!-- Desktop Actions -->
+        <div class="desktop-nav">
+            <MudIconButton Icon="@DarkLightModeButtonIcon"
+                           Color="Color.Inherit"
+                           OnClick="@DarkModeToggle" />
+
+            <MudButton Href="/login"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Login"
+                       style="background-color: #667eea; color: #ffffff;">
+                Sign In
+            </MudButton>
+        </div>
+
+        <!-- Mobile Menu Toggle -->
+        <div class="mobile-menu-toggle">
+            <MudIconButton Icon="@DarkLightModeButtonIcon"
+                           Color="Color.Inherit"
+                           OnClick="@DarkModeToggle" />
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           OnClick="@ToggleDrawer" />
+        </div>
+    </MudAppBar>
+
+    <!-- Mobile Drawer (Hamburger Menu) -->
+    <MudDrawer @bind-Open="_drawerOpen"
+               Anchor="Anchor.Right"
+               Elevation="2"
+               Variant="DrawerVariant.Temporary"
+               Class="mobile-drawer">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Menu</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavLink Href="/"
+                        Icon="@Icons.Material.Filled.Home"
+                        OnClick="@CloseDrawer">
+                Home
+            </MudNavLink>
+
+            @if (IsAnnouncementsPage)
+            {
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("programs"))"
+                            Icon="@Icons.Material.Filled.Work">
+                    Programs
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("events"))"
+                            Icon="@Icons.Material.Filled.Event">
+                    Events
+                </MudNavLink>
+                <MudNavGroup Title="What's New" Icon="@Icons.Material.Filled.Newspaper" Expanded="false">
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("news"))"
+                                Icon="@Icons.Material.Filled.Article">
+                        News Articles
+                    </MudNavLink>
+                </MudNavGroup>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("transparency"))"
+                            Icon="@Icons.Material.Filled.Assessment">
+                    Transparency
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("get-involved"))"
+                            Icon="@Icons.Material.Filled.VolunteerActivism">
+                    Get Involved
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("contact"))"
+                            Icon="@Icons.Material.Filled.ContactMail">
+                    Contact
+                </MudNavLink>
+                <MudNavLink Href="/about"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Info"
+                            OnClick="@CloseDrawer">
+                    About
+                    </MudNavLink>
+                }
+                else if (IsNewsArticlesPage)
+                {
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("programs"))"
+                                Icon="@Icons.Material.Filled.Work">
+                        Programs
+                    </MudNavLink>
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("events"))"
+                                Icon="@Icons.Material.Filled.Event">
+                        Events
+                    </MudNavLink>
+                    <MudNavGroup Title="What's New" Icon="@Icons.Material.Filled.Newspaper" Expanded="false">
+                        <MudNavLink OnClick="@(() => ScrollToSectionAndClose("announcements"))"
+                                    Icon="@Icons.Material.Filled.Campaign">
+                            Announcements
+                        </MudNavLink>
+                    </MudNavGroup>
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("transparency"))"
+                                Icon="@Icons.Material.Filled.Assessment">
+                        Transparency
+                    </MudNavLink>
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("get-involved"))"
+                                Icon="@Icons.Material.Filled.VolunteerActivism">
+                        Get Involved
+                    </MudNavLink>
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("contact"))"
+                                Icon="@Icons.Material.Filled.ContactMail">
+                        Contact
+                    </MudNavLink>
+                    <MudNavLink Href="/about"
+                                Match="NavLinkMatch.Prefix"
+                                Icon="@Icons.Material.Filled.Info"
+                                OnClick="@CloseDrawer">
+                        About
+                    </MudNavLink>
+                }
+                else
+            {
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("programs"))"
+                            Icon="@Icons.Material.Filled.Work">
+                    Programs
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("events"))"
+                            Icon="@Icons.Material.Filled.Event">
+                    Events
+                </MudNavLink>
+                <MudNavGroup Title="What's New" Icon="@Icons.Material.Filled.Newspaper" Expanded="false">
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("announcements"))"
+                                Icon="@Icons.Material.Filled.Campaign">
+                        Announcements
+                    </MudNavLink>
+                    <MudNavLink OnClick="@(() => ScrollToSectionAndClose("news"))"
+                                Icon="@Icons.Material.Filled.Article">
+                        News Articles
+                    </MudNavLink>
+                </MudNavGroup>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("transparency"))"
+                            Icon="@Icons.Material.Filled.Assessment">
+                    Transparency
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("get-involved"))"
+                            Icon="@Icons.Material.Filled.VolunteerActivism">
+                    Get Involved
+                </MudNavLink>
+                <MudNavLink OnClick="@(() => ScrollToSectionAndClose("contact"))"
+                            Icon="@Icons.Material.Filled.ContactMail">
+                    Contact
+                </MudNavLink>
+                <MudNavLink Href="/about"
+                            Match="NavLinkMatch.Prefix"
+                            Icon="@Icons.Material.Filled.Info"
+                            OnClick="@CloseDrawer">
+                    About
+                </MudNavLink>
+            }
+
+            <MudDivider Class="my-2" Style="border-color: var(--mud-palette-secondary); border-width: 1px;" />
+            <MudNavLink Href="/login"
+                        Match="NavLinkMatch.Prefix"
+                        Icon="@Icons.Material.Filled.Login"
+                        OnClick="@CloseDrawer">
+                Sign In
+            </MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pt-16 pa-4">
+        @Body
+    </MudMainContent>
+</MudLayout>
+</div>
+@code {
+    private MudTheme? _theme = null;
+    private bool _initialized = false;
+    private bool _drawerOpen = false;
+    private bool IsHomePage => NavigationManager.Uri == NavigationManager.BaseUri ||
+                            NavigationManager.Uri == NavigationManager.BaseUri + "/";
+    private bool IsAnnouncementsPage => NavigationManager.Uri.Contains("/announcements");
+    private bool IsNewsArticlesPage => NavigationManager.Uri.Contains("/news");
+
+    private bool _isDropdownOpen = false;
+
+    private void CloseDropdown()
+    {
+        _isDropdownOpen = false;
+    }
+
+    private void ToggleDropdown()
+    {
+        _isDropdownOpen = !_isDropdownOpen;
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        _theme = new()
+        {
+            PaletteLight = _lightPalette,
+            PaletteDark = _darkPalette,
+            LayoutProperties = new LayoutProperties()
+        };
+
+        ThemeService.OnThemeChanged += OnThemeChanged;
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await ThemeService.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void OnThemeChanged()
+    {
+        StateHasChanged();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _drawerOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task DarkModeToggle()
+    {
+        await ThemeService.ToggleDarkModeAsync();
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void CloseDrawer()
+    {
+        _drawerOpen = false;
+    }
+
+    private void ScrollToSection(string sectionId)
+    {
+        NavigationManager.NavigateTo($"#{sectionId}", false);
+    }
+
+    private void ScrollToSectionAndClose(string sectionId)
+    {
+        CloseDrawer();
+        ScrollToSection(sectionId);
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+
+    private readonly PaletteLight _lightPalette = new()
+    {
+        Black = "#110e2d",
+        AppbarText = "#424242",
+        AppbarBackground = "rgba(255,255,255,0.8)",
+        DrawerBackground = "#FFCCFF",
+        GrayLight = "#e8e8e8",
+        GrayLighter = "#f9f9f9",
+        Background = "#FFCCFF"
+    };
+
+    private readonly PaletteDark _darkPalette = new()
+    {
+        Primary = "#7e6fff",
+        Surface = "#1e1e2d",
+        Background = "#1a1a27",
+        BackgroundGray = "#151521",
+        AppbarText = "#92929f",
+        AppbarBackground = "rgba(26,26,39,0.8)",
+        DrawerBackground = "#1a1a27",
+        ActionDefault = "#74718e",
+        ActionDisabled = "#9999994d",
+        ActionDisabledBackground = "#605f6d4d",
+        TextPrimary = "#b2b0bf",
+        TextSecondary = "#92929f",
+        TextDisabled = "#ffffff33",
+        DrawerIcon = "#92929f",
+        DrawerText = "#92929f",
+        GrayLight = "#2a2833",
+        GrayLighter = "#1e1e2d",
+        Info = "#4a86ff",
+        Success = "#3dcb6c",
+        Warning = "#ffb545",
+        Error = "#ff3f5f",
+        LinesDefault = "#33323e",
+        TableLines = "#33323e",
+        Divider = "#292838",
+        OverlayLight = "#1e1e2d80",
+    };
+
+    public string DarkLightModeButtonIcon => ThemeService.IsDarkMode
+        ? Icons.Material.Rounded.AutoMode
+        : Icons.Material.Outlined.DarkMode;
+}

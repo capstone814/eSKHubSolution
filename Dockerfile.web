@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+COPY ["eSKHub/eSKHub.csproj", "eSKHub/"]
+RUN dotnet restore "eSKHub/eSKHub.csproj"
+COPY . .
+WORKDIR "/src/eSKHub"
+RUN dotnet publish "eSKHub.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
+WORKDIR /app
+COPY --from=build /app/publish .
+ENV PORT=8080
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_USE_POLLING_FILE_WATCHER=true
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "eSKHub.dll"]

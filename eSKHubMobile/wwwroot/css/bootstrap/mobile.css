@@ -1,0 +1,662 @@
+/* =========================================
+   Global / Reset
+   ========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* =========================================
+   Common Components
+   ========================================= */
+
+/* Buttons */
+.btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* Login version */
+    /* Settings/Home used 7e6fff -> 5e4fdf, but let's standardize on the rich one or the primary one */
+    background: linear-gradient(135deg, #7e6fff 0%, #5e4fdf 100%);
+    color: white;
+}
+
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(126, 111, 255, 0.4);
+    }
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-danger {
+    background: #f44336;
+    color: white;
+}
+
+.btn-warning {
+    background: #ff9800;
+    color: white;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+/* Alerts */
+.alert {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+    /* Login had slightly different colors: #efe, #3c3, #cfc */
+}
+
+.alert-error, .alert-danger {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+.alert-warning {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+.alert-info {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    border: 1px solid #bbdefb;
+}
+
+.alert-icon {
+    font-size: 18px;
+}
+
+/* Spinners */
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.spinner-small {
+    width: 12px;
+    height: 12px;
+    border: 2px solid #7e6fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    animation: slideUp 0.3s ease-out;
+    z-index: 1000;
+}
+
+.toast-success {
+    background: #4caf50;
+}
+
+.toast-error {
+    background: #f44336;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateX(-50%) translateY(100px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+}
+
+/* =========================================
+   Login Page
+   ========================================= */
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    padding: 20px;
+}
+
+.login-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.login-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 40px 20px;
+    text-align: center;
+    position: relative;
+}
+
+    .login-header h1 {
+        font-size: 28px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .login-header p {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+
+.connection-status {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+    .status-dot.online {
+        background-color: #4caf50;
+        box-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+        animation: pulse 2s infinite;
+    }
+
+    .status-dot.offline {
+        background-color: #ff9800;
+    }
+
+.status-text {
+    font-weight: 500;
+}
+
+.login-form {
+    padding: 30px 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+.form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+    .form-control:focus {
+        outline: none;
+        border-color: #7e6fff;
+    }
+
+    .form-control:disabled {
+        background-color: #f5f5f5;
+        cursor: not-allowed;
+    }
+
+.password-input {
+    position: relative;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    padding: 4px;
+}
+
+.sync-indicator {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #666;
+}
+
+@media (max-width: 480px) {
+    .login-header h1 {
+        font-size: 24px;
+    }
+
+    .login-header p {
+        font-size: 14px;
+    }
+
+    .login-form {
+        padding: 20px 16px;
+    }
+
+    .connection-status {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+}
+
+/* =========================================
+   Council Home
+   ========================================= */
+.home-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    color: white;
+    padding: 24px 20px 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-content h1 {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.btn-logout {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+    .btn-logout:active {
+        transform: scale(0.95);
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+.content {
+    padding: 20px;
+}
+
+.sync-status {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Status dots in Home reused Login's .status-dot logic but names were slightly diff in inline styles (.status-online) */
+/* Normalizing to reuse the earlier .status-dot if possible, or keeping specific classes */
+.status-online {
+    color: #4caf50;
+    font-weight: 600;
+}
+/* Note: above is text version for settings. Below is dot version for home */
+div.sync-status .status-online {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    color: transparent; /* It's a dot */
+    background-color: #4caf50;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+    animation: pulse 2s infinite;
+}
+
+div.sync-status .status-offline {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ff9800;
+}
+
+.btn-sync {
+    margin-left: auto;
+    background: #7e6fff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+    .btn-sync:active {
+        transform: scale(0.95);
+    }
+
+    .btn-sync:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+.announcements-section h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #333;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+}
+
+.spinner-large {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e0e0e0;
+    border-top-color: #7e6fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+
+.empty-state {
+    background: white;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    color: #999;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.announcements-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.announcement-card {
+    background: white;
+    border-radius: 12px;
+    border-left: 4px solid #7e6fff;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
+}
+
+    .announcement-card:active {
+        transform: scale(0.98);
+    }
+
+.announcement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 12px;
+    gap: 12px;
+}
+
+    .announcement-header h3 {
+        font-size: 18px;
+        color: #333;
+        flex: 1;
+    }
+
+.badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.badge-general {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.badge-event {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.badge-news {
+    background: #e8f5e9;
+    color: #388e3c;
+}
+
+.badge-important {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.badge-update {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.announcement-body {
+    margin-bottom: 12px;
+    line-height: 1.6;
+    color: #666;
+}
+
+.announcement-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #999;
+}
+
+@media (max-width: 480px) {
+    .header-content h1 {
+        font-size: 20px;
+    }
+
+    .announcement-header {
+        flex-direction: column;
+    }
+
+    .badge {
+        align-self: flex-start;
+    }
+}
+
+/* =========================================
+   Settings
+   ========================================= */
+.settings-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.settings-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    color: white;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.btn-back {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.settings-header h1 {
+    font-size: 24px;
+    margin: 0;
+}
+
+.settings-content {
+    padding: 20px;
+}
+
+.settings-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+    .settings-section h2 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: #333;
+    }
+
+    .settings-section h3 {
+        font-size: 16px;
+        margin: 16px 0 8px;
+        color: #666;
+    }
+
+.info-card {
+    background: #f9f9f9;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+.info-label {
+    font-weight: 600;
+    color: #666;
+}
+
+/* Text status indicators for Settings */
+span.status-online {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+span.status-offline {
+    color: #ff9800;
+    font-weight: 600;
+}
+
+.server-info {
+    background: #e3f2fd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+    .server-info p {
+        margin: 4px 0;
+        font-size: 14px;
+    }
+
+.warning-text {
+    font-size: 13px;
+    color: #666;
+    margin-top: 8px;
+    text-align: center;
+}

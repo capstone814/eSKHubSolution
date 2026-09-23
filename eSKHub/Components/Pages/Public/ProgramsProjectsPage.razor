@@ -1,0 +1,808 @@
+﻿@page "/programs"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ThemeService ThemeService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Programs & Projects - eSKHub</PageTitle>
+
+<style>
+    /* Same styling structure as AnnouncementsPage */
+    .programs-layout {
+        display: flex;
+        gap: 0;
+        min-height: auto;
+        margin-left: -16px;
+        margin-bottom: 16px;
+    }
+
+    .programs-drawer {
+        width: 350px;
+        border-right: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        margin-left: 0;
+        padding-left: 0;
+        height: calc(100vh - 65px);
+        position: fixed;
+        top: 65px;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 10;
+    }
+
+    .drawer-header-light {
+        padding: 16px;
+        border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-header-dark {
+        padding: 16px;
+        border-bottom: 2px solid var(--mud-palette-primary);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-filters {
+        padding: 16px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .drawer-list {
+        padding: 8px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .program-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+
+        .program-item:hover {
+            background: var(--mud-palette-action-default-hover);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+        .program-item.selected {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+    .program-item-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .program-item-desc {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .program-item-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.7rem;
+        color: var(--mud-palette-text-secondary);
+        gap: 8px;
+    }
+
+    .program-item-category {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 0.65rem;
+        font-weight: 600;
+    }
+
+    .programs-content {
+        flex: 1;
+        padding: 32px;
+        overflow-y: auto;
+        margin-left: 350px;
+    }
+
+    .content-header {
+        margin-bottom: 24px;
+    }
+
+    .content-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        line-height: 1.2;
+    }
+
+    .content-meta {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 16px 0;
+        border-bottom: 2px solid var(--mud-palette-secondary);
+        margin-bottom: 24px;
+    }
+
+        .content-meta .mud-chip {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+
+    .content-section {
+        margin-bottom: 32px;
+    }
+
+        .content-section h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--mud-palette-primary);
+        }
+
+        .content-section p, .content-section div {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+    .content-body-with-image {
+        overflow: hidden;
+    }
+
+        .content-body-with-image img {
+            float: left;
+            width: 250px;
+            max-width: 40%;
+            height: auto;
+            margin-right: 16px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+    .content-attachment {
+        margin-top: 32px;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 300px;
+        text-align: center;
+        padding: 32px;
+    }
+
+    .empty-drawer-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        text-align: center;
+    }
+
+    .filter-toggle-button {
+        display: none;
+    }
+
+    .filter-section-desktop {
+        display: flex !important;
+    }
+
+    .filter-section-mobile {
+        display: none !important;
+    }
+
+    .budget-display {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--mud-palette-success);
+    }
+
+    
+
+    @@media (max-width: 600px) {
+        .content-meta
+
+    {
+        gap: 8px;
+    }
+
+    .content-meta .mud-chip {
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        height: auto;
+        min-height: 28px;
+    }
+
+    .content-section p, .content-section div {
+        font-size: 1rem;
+    }
+
+    .content-section h3 {
+        font-size: 1.25rem;
+    }
+
+    .content-body-with-image img {
+        float: none;
+        width: 100%;
+        max-width: 100%;
+        margin-right: 0;
+        margin-bottom: 16px;
+    }
+
+    .programs-layout {
+        flex-direction: column;
+        margin-left: 0;
+    }
+
+    .programs-drawer {
+        width: 100%;
+        position: relative;
+        border-right: none;
+        top: 10px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+        max-height: 480px;
+        border-radius: 8px;
+    }
+
+        .programs-drawer.filters-collapsed {
+            max-height: 280px;
+        }
+
+    .filter-section-desktop {
+        display: none !important;
+    }
+
+    .filter-section-mobile {
+        display: flex !important;
+    }
+
+    .filter-toggle-button {
+        display: inline-flex !important;
+    }
+
+    .filters-hidden {
+        display: none !important;
+    }
+
+    .filters-visible {
+        display: flex !important;
+    }
+
+    .programs-content {
+        margin-left: 0;
+        max-height: none;
+        padding: 12px;
+        margin-top: 20px;
+    }
+
+    .content-title {
+        font-size: 1.75rem;
+    }
+
+    .budget-display {
+        font-size: 1.1rem;
+    }
+
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0">
+    <div class="programs-layout">
+        <!-- Drawer -->
+        <div class="programs-drawer @(!_showFilters ? "filters-collapsed" : "")">
+            <div class="@(ThemeService.IsDarkMode ? "drawer-header-dark" : "drawer-header-light")">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2 header-content">
+                    <MudIcon Icon="@Icons.Material.Filled.Work" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Style="font-weight: 700;">PROGRAMS/ PROJECTS</MudText>
+                </MudStack>
+                <MudText Typo="Typo.caption" Style="color: #ffffff;">
+                    @_filteredPrograms.Count of @_allPrograms.Count Initiatives
+                </MudText>
+            </div>
+
+            <div class="drawer-filters">
+                <!-- Mobile Filter Toggle Button -->
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+                           FullWidth="true"
+                           OnClick="@(() => _showFilters = !_showFilters)"
+                           Class="filter-toggle-button">
+                    @(_showFilters ? "Hide Filters" : "Show Filters")
+                </MudButton>
+
+                <!-- Desktop Filters -->
+                <MudStack Spacing="1" Class="filter-section-desktop">
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Category"
+                               @bind-Value="_categoryFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Categories</MudSelectItem>
+                        <MudSelectItem Value="@("Youth Development")">Youth Development</MudSelectItem>
+                        <MudSelectItem Value="@("Environment")">Environment</MudSelectItem>
+                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                        <MudSelectItem Value="@("Employment")">Employment</MudSelectItem>
+                        <MudSelectItem Value="@("Health")">Health</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Proposed By"
+                               @bind-Value="_proposerFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Proposers</MudSelectItem>
+                        @foreach (var proposer in _proposers)
+                        {
+                            <MudSelectItem Value="@proposer">@proposer</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_categoryFilter != "all" || _proposerFilter != "all" || _sortFilter != "newest")
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+
+                <!-- Mobile Filters -->
+                <MudStack Spacing="1" Class="@($"filter-section-mobile {(_showFilters ? "filters-visible" : "filters-hidden")}")">
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Category"
+                               @bind-Value="_categoryFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Categories</MudSelectItem>
+                        <MudSelectItem Value="@("Youth Development")">Youth Development</MudSelectItem>
+                        <MudSelectItem Value="@("Environment")">Environment</MudSelectItem>
+                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                        <MudSelectItem Value="@("Employment")">Employment</MudSelectItem>
+                        <MudSelectItem Value="@("Health")">Health</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Proposed By"
+                               @bind-Value="_proposerFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Proposers</MudSelectItem>
+                        @foreach (var proposer in _proposers)
+                        {
+                            <MudSelectItem Value="@proposer">@proposer</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_categoryFilter != "all" || _proposerFilter != "all" || _sortFilter != "newest")
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+            </div>
+
+            <div class="drawer-list">
+                @if (_filteredPrograms.Any())
+                {
+                    @foreach (var program in _filteredPrograms)
+                    {
+                        var styles = GetCategoryStyles(program.Category);
+                        <div class="program-item @(_selectedProgram?.Id == program.Id ? "selected" : "")"
+                             @onclick="() => SelectProgram(program)">
+                            <div class="program-item-title">@program.Title</div>
+                            <div class="program-item-desc">@program.Description</div>
+                            <div class="program-item-meta">
+                                <span class="program-item-category" style="@($"background: {styles.BackgroundColor}; color: {styles.TextColor};")">
+                                    @program.Category
+                                </span>
+                                <span>@program.DateCreated.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty-drawer-state">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px; font-weight: 600;">
+                            No Programs Found
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="opacity: 0.7;">
+                            @if (_isLoading)
+                            {
+                                <text>Loading programs...</text>
+                            }
+                            else if (HasActiveFilters())
+                            {
+                                <text>Try adjusting your filters to see more results</text>
+                            }
+                            else
+                            {
+                                <text>There are no published programs at this time</text>
+                            }
+                        </MudText>
+                        @if (HasActiveFilters())
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Clear"
+                                       OnClick="ClearFilters"
+                                       Style="margin-top: 16px;">
+                                Clear Filters
+                            </MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="programs-content">
+            @if (_selectedProgram != null)
+            {
+                <div class="content-header">
+                    <div class="content-title">@_selectedProgram.Title</div>
+                    <div class="content-meta">
+                        <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(_selectedProgram.Category)" Icon="@Icons.Material.Filled.Category">
+                            @_selectedProgram.Category
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.Person">
+                            @_selectedProgram.ProposedBy (@_selectedProgram.ProposerPosition - @_selectedProgram.ProposerArea)
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.CalendarToday">
+                            @_selectedProgram.DateCreated.ToString("MMMM dd, yyyy")
+                        </MudChip>
+                        @if (_selectedProgram.Audience == "Barangay")
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.LocationOn">
+                                @_selectedProgram.TargetBarangay
+                            </MudChip>
+                        }
+                    </div>
+                </div>
+
+                <div class="content-body-with-image">
+                    @if (_selectedProgram.AttachmentData != null &&
+                                    _selectedProgram.AttachmentData.Length > 0 &&
+                                    _selectedProgram.AttachmentType == "image")
+                    {
+                        <img src="@GetAttachmentPath(_selectedProgram)" alt="Program attachment" />
+                    }
+
+                    <div class="content-section">
+                        <h3>Description</h3>
+                        <p>@_selectedProgram.Description</p>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Objectives</h3>
+                        <div>@_selectedProgram.Objectives</div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Target Beneficiaries</h3>
+                        <p>@_selectedProgram.TargetBeneficiaries</p>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Expected Outcomes</h3>
+                        <div>@_selectedProgram.ExpectedOutcomes</div>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Budget & Timeline</h3>
+                        <MudStack Spacing="2">
+                            <div>
+                                <strong>Budget:</strong>
+                                <span class="budget-display">₱@_selectedProgram.Budget.ToString("N2")</span>
+                            </div>
+                            <div>
+                                <strong>Timeline:</strong> @_selectedProgram.Timeline
+                            </div>
+                            <div style="display: flex; gap: 12px; align-items: center; margin-top: 8px;">
+                                <div style="background-color: #10b981; color: white; padding: 8px 16px; border-radius: 20px; display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 500;">
+                                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" Style="font-size: 18px;" />
+                                    <span style="line-height: 1;">Start: @_selectedProgram.StartDate.ToString("MMM dd, yyyy")</span>
+                                </div>
+                                <div style="background-color: #ef4444; color: white; padding: 8px 16px; border-radius: 20px; display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 500;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Stop" Size="Size.Small" Style="font-size: 18px;" />
+                                    <span style="line-height: 1;">End: @_selectedProgram.EndDate.ToString("MMM dd, yyyy")</span>
+                                </div>
+                            </div>
+                        </MudStack>
+                    </div>
+
+                    <div class="content-section">
+                        <h3>Venue</h3>
+                        <p>@_selectedProgram.Venue</p>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_selectedProgram.Partners))
+                    {
+                        <div class="content-section">
+                            <h3>Partners & Collaborators</h3>
+                            <p>@_selectedProgram.Partners</p>
+                        </div>
+                    }
+
+                    @if (_selectedProgram.AttachmentData != null &&
+                                    _selectedProgram.AttachmentData.Length > 0 &&
+                                    _selectedProgram.AttachmentType != "image")
+                    {
+                        <div class="content-attachment">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="@(async () => await DownloadAttachment(_selectedProgram))">
+                                Download Attachment
+                            </MudButton>
+                        </div>
+                    }
+                </div>
+            }
+            else if (!_isLoading)
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.Work"
+                             Size="Size.Large"
+                             Color="Color.Secondary"
+                             Style="font-size: 80px; margin-bottom: 16px;" />
+                    <MudText Typo="Typo.h5" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                        Select a program
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Choose a program from the list to view its full details
+                    </MudText>
+                </div>
+            }
+
+            @if (_isLoading)
+            {
+                <div class="empty-state">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Style="margin-top: 16px;">
+                        Loading programs...
+                    </MudText>
+                </div>
+            }
+        </div>
+    </div>
+</MudContainer>
+
+@code {
+    private bool _showFilters = false;
+
+    private List<ProgramProject> _allPrograms = new();
+    private List<ProgramProject> _filteredPrograms = new();
+    private ProgramProject? _selectedProgram;
+    private bool _isLoading = true;
+
+    private List<string> _proposers = new();
+
+    private string _sortFilter = "newest";
+    private string _categoryFilter = "all";
+    private string _proposerFilter = "all";
+
+    [SupplyParameterFromQuery(Name = "id")]
+    public int? SelectedProgramId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ThemeService.OnThemeChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+
+    private bool HasActiveFilters()
+    {
+        return _sortFilter != "newest" ||
+               _categoryFilter != "all" ||
+               _proposerFilter != "all";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPrograms();
+    }
+
+    private async Task LoadPrograms()
+    {
+        _isLoading = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _allPrograms = await db.ProgramsProjects
+                .Where(p => p.IsPublished && p.Status == "Approved" && p.Audience == "Public")
+                .OrderByDescending(p => p.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _proposers = _allPrograms
+                .Select(p => p.ProposedBy)
+                .Distinct()
+                .OrderBy(p => p)
+                .ToList();
+
+            ApplyFilters();
+
+            if (SelectedProgramId.HasValue)
+            {
+                _selectedProgram = _filteredPrograms.FirstOrDefault(p => p.Id == SelectedProgramId.Value);
+
+                if (_selectedProgram == null)
+                {
+                    _selectedProgram = _allPrograms.FirstOrDefault(p => p.Id == SelectedProgramId.Value);
+                }
+            }
+            else
+            {
+                _selectedProgram = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading programs: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredPrograms = _allPrograms;
+
+        if (_categoryFilter != "all")
+        {
+            _filteredPrograms = _filteredPrograms
+                .Where(p => p.Category == _categoryFilter)
+                .ToList();
+        }
+
+        if (_proposerFilter != "all")
+        {
+            _filteredPrograms = _filteredPrograms
+                .Where(p => p.ProposedBy == _proposerFilter)
+                .ToList();
+        }
+
+        _filteredPrograms = _sortFilter == "newest"
+            ? _filteredPrograms.OrderByDescending(p => p.DateCreated).ToList()
+            : _filteredPrograms.OrderBy(p => p.DateCreated).ToList();
+
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        _sortFilter = "newest";
+        _categoryFilter = "all";
+        _proposerFilter = "all";
+        ApplyFilters();
+    }
+
+    private void SelectProgram(ProgramProject program)
+    {
+        _selectedProgram = program;
+    }
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Youth Development" => Color.Primary,
+        "Environment" => Color.Success,
+        "Sports" => Color.Info,
+        "Employment" => Color.Warning,
+        "Health" => Color.Error,
+        _ => Color.Default
+    };
+
+    private (string BorderColor, string BackgroundColor, string TextColor) GetCategoryStyles(string category)
+    {
+        return category switch
+        {
+            "Youth Development" => ("#7e6fff", "rgba(126, 111, 255, 0.1)", "#7e6fff"),
+            "Environment" => ("#10b981", "rgba(16, 185, 129, 0.1)", "#10b981"),
+            "Sports" => ("#3b82f6", "rgba(59, 130, 246, 0.1)", "#3b82f6"),
+            "Employment" => ("#f59e0b", "rgba(245, 158, 11, 0.1)", "#f59e0b"),
+            "Health" => ("#ef4444", "rgba(239, 68, 68, 0.1)", "#ef4444"),
+            _ => ("#6b7280", "rgba(107, 114, 128, 0.1)", "#6b7280")
+        };
+    }
+
+    private string GetAttachmentPath(ProgramProject program)
+    {
+        if (program.AttachmentData != null && !string.IsNullOrEmpty(program.AttachmentMimeType))
+        {
+            return $"data:{program.AttachmentMimeType};base64,{Convert.ToBase64String(program.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment(ProgramProject program)
+    {
+        if (program.AttachmentData != null && !string.IsNullOrEmpty(program.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(program.AttachmentData);
+            var fileName = program.Attachment ?? "document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, program.AttachmentMimeType, base64);
+        }
+    }
+}

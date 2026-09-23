@@ -1,0 +1,387 @@
+﻿@using MudBlazor
+@using eSKHub.Components.Model
+@using eSKHub.Model
+@using System.Security.Cryptography
+@using System.Text
+@using System.Text.RegularExpressions
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Formats.Png
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        UPDATE ACCOUNT
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_editingUser">
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2" Align="Align.Center">Upload Profile Image</MudText>
+
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; position: relative; margin-bottom: 16px;">
+                @if (!string.IsNullOrEmpty(_imagePreviewUrl))
+                {
+                    <label for="upload-image" style="position: absolute; top: 10px; z-index: 2; opacity: 0.5; cursor: pointer;">
+                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Large" />
+                    </label>
+
+                    <img src="@_imagePreviewUrl"
+                         alt="Preview"
+                         style="max-height: 150px; max-width:150px; border-radius: 6px;" />
+                }
+                else
+                {
+                    <label for="upload-image" style="cursor: pointer;">
+                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Large" />
+                    </label>
+                }
+
+                <InputFile id="upload-image"
+                           OnChange="OnFileChanged"
+                           accept="image/*"
+                           style="display: none;" />
+            </div>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Full Name"
+                                  @bind-Value="_editingUser.Fullname"
+                                  Required="true"
+                                  RequiredError="Full name is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Username"
+                                  @bind-Value="_editingUser.Username"
+                                  Required="true"
+                                  RequiredError="Username is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="12">
+                    <MudTextField T="string"
+                                  Label="Email"
+                                  @bind-Value="_editingUser.Email"
+                                  Required="true"
+                                  RequiredError="Email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Position"
+                                  @bind-Value="_editingUser.Position"
+                                  Required="true"
+                                  RequiredError="Position is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string"
+                               Label="@(_editingUser.Role == "Admin" ? "Municipality" : "Barangay")"
+                               @bind-Value="_editingUser.Area"
+                               Required="true"
+                               RequiredError="@(_editingUser.Role == "Admin" ? "Municipality is required" : "Barangay is required")"
+                               Variant="Variant.Outlined"
+                               Disabled="@(_editingUser.Role != "Admin")">
+                        @if (_editingUser.Role == "Admin")
+                        {
+                            @foreach (var area in _municipalities)
+                            {
+                                <MudSelectItem Value="@area.Name">@area.Name</MudSelectItem>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var area in _barangays)
+                            {
+                                <MudSelectItem Value="@area.Name">@area.Name</MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Password"
+                                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@TogglePasswordVisibility"
+                                  @bind-Value="_password"
+                                  Immediate="true"
+                                  Validation="@(new Func<string, string?>(ValidatePassword))"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="Leave blank to keep current password" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string"
+                                  Label="Confirm Password"
+                                  InputType="@(_showConfirmPassword ? InputType.Text : InputType.Password)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showConfirmPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@ToggleConfirmPasswordVisibility"
+                                  @bind-Value="_confirmPassword"
+                                  Immediate="true"
+                                  Validation="@(new Func<string, string?>(ValidateConfirmPassword))"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="MudBlazor.Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="MudBlazor.Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Updating...</span>
+            }
+            else
+            {
+                <span>Update</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    private User _editingUser = new();
+    private string _password = string.Empty;
+    private string _confirmPassword = string.Empty;
+
+    private bool _showPassword = false;
+    private bool _showConfirmPassword = false;
+
+    private string? _imagePreviewUrl;
+    private byte[]? _imageBytes;
+    private string? _imageMimeType;
+
+    [Parameter]
+    public User UserToEdit { get; set; } = default!;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<Area> _municipalities = new();
+    private List<Area> _barangays = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editingUser = new User
+        {
+            Id = UserToEdit.Id,
+            Username = UserToEdit.Username,
+            Email = UserToEdit.Email,
+            Password = UserToEdit.Password,
+            Fullname = UserToEdit.Fullname,
+            Position = UserToEdit.Position,
+            Area = UserToEdit.Area,
+            Role = UserToEdit.Role,
+            ImageData = UserToEdit.ImageData,
+            ImageMimeType = UserToEdit.ImageMimeType
+        };
+
+        // Load existing image from binary data
+        if (_editingUser.ImageData != null && !string.IsNullOrEmpty(_editingUser.ImageMimeType))
+        {
+            _imagePreviewUrl = $"data:{_editingUser.ImageMimeType};base64,{Convert.ToBase64String(_editingUser.ImageData)}";
+        }
+        // Fallback to old Image field if still exists (for backward compatibility)
+        else if (!string.IsNullOrEmpty(_editingUser.Image))
+        {
+            _imagePreviewUrl = $"/Uploads/{_editingUser.Image}";
+        }
+        else
+        {
+            _imagePreviewUrl = null;
+        }
+
+        await LoadAreas(); // Load areas on initialization
+    }
+
+    private async Task LoadAreas()
+    {
+        _municipalities = await Db.Areas.Where(a => a.Type == "Municipality").OrderBy(a => a.Name).ToListAsync();
+        _barangays = await Db.Areas.Where(a => a.Type == "Barangay").OrderBy(a => a.Name).ToListAsync();
+    }
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address (e.g., example@mail.com)";
+
+        return null;
+    }
+
+    private string? ValidatePassword(string password)
+    {
+        if (!string.IsNullOrEmpty(password) && password.Length < 6)
+            return "Password must be at least 6 characters";
+        return null;
+    }
+
+    private string? ValidateConfirmPassword(string confirmPassword)
+    {
+        if (!string.IsNullOrEmpty(_password) && confirmPassword != _password)
+            return "Passwords do not match";
+        return null;
+    }
+
+    private static string HashPassword(string password)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(password);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+            return;
+
+        _isSaving = true;
+
+        try
+        {
+            // Check for existing username
+            var existingUsername = Db.Users
+                .FirstOrDefault(u => u.Id != _editingUser.Id &&
+                                   u.Username != null &&
+                                   u.Username.ToLower() == _editingUser.Username.ToLower());
+
+            if (existingUsername != null)
+            {
+                Snackbar.Add("Username already exists. Please choose a different username.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            // Check for existing email
+            var existingEmail = Db.Users
+                .FirstOrDefault(u => u.Id != _editingUser.Id &&
+                                   u.Email != null &&
+                                   u.Email.ToLower() == (_editingUser.Email ?? "").ToLower());
+
+            if (existingEmail != null)
+            {
+                Snackbar.Add("Email already exists. Please use a different email address.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_password))
+            {
+                _editingUser.Password = HashPassword(_password);
+            }
+
+            var userInDb = await Db.Users.FindAsync(_editingUser.Id);
+            if (userInDb != null)
+            {
+                userInDb.Username = _editingUser.Username;
+                userInDb.Email = _editingUser.Email;
+                userInDb.Password = _editingUser.Password;
+                userInDb.Fullname = _editingUser.Fullname;
+                userInDb.Position = _editingUser.Position;
+                userInDb.Area = _editingUser.Area;
+
+                // Update image if new one was uploaded
+                if (_imageBytes != null && !string.IsNullOrEmpty(_imageMimeType))
+                {
+                    userInDb.ImageData = _imageBytes;
+                    userInDb.ImageMimeType = _imageMimeType;
+                }
+
+                await Db.SaveChangesAsync();
+                Snackbar.Add("Account updated successfully!", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating account: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void TogglePasswordVisibility() => _showPassword = !_showPassword;
+    private void ToggleConfirmPasswordVisibility() => _showConfirmPassword = !_showConfirmPassword;
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("Image size must be less than 5MB", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var inputStream = file.OpenReadStream(5 * 1024 * 1024);
+            using var image = await Image.LoadAsync(inputStream);
+
+            // Resize to 300x300 max
+            image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+            {
+                Size = new SixLabors.ImageSharp.Size(300, 300),
+                Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
+            }));
+
+            using var ms = new MemoryStream();
+
+            // Check if image has transparency (PNG)
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            bool isPng = extension == ".png";
+
+            // Use PNG for transparent images, JPEG for others
+            if (isPng)
+            {
+                var encoder = new PngEncoder { CompressionLevel = PngCompressionLevel.BestCompression };
+                await image.SaveAsync(ms, encoder);
+                _imageMimeType = "image/png";
+                _imagePreviewUrl = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+            }
+            else
+            {
+                var encoder = new JpegEncoder { Quality = 70 };
+                await image.SaveAsync(ms, encoder);
+                _imageMimeType = "image/jpeg";
+                _imagePreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(ms.ToArray())}";
+            }
+
+            _imageBytes = ms.ToArray();
+
+            Snackbar.Add($"Image uploaded ({_imageBytes.Length / 1024}KB)", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error processing image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

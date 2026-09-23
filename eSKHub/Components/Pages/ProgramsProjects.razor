@@ -1,0 +1,667 @@
+﻿@page "/programs-projects-review"
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using eSKHub.Components.Pages.Dialogs
+@using eSKHub.Components.Dialogs
+@inject IDialogService DialogService
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Review Programs & Projects</PageTitle>
+
+<style>
+    .program-card {
+        margin-bottom: 16px;
+        border-left: 4px solid #7e6fff;
+        transition: transform 0.2s ease;
+    }
+
+        .program-card:hover {
+            transform: translateX(4px);
+        }
+
+    .program-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, rgba(126, 111, 255, 0.1) 0%, rgba(126, 111, 255, 0.05) 100%);
+    }
+
+    .program-body {
+        padding: 16px;
+    }
+
+    .program-meta {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .filter-section {
+        margin-top: 16px;
+        margin-bottom: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .desktop-cards {
+        display: block;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    @@media (max-width: 600px) {
+        .program-meta
+
+    {
+        font-size: 0.85rem;
+    }
+
+    .filter-toggle-button {
+        display: inline-flex !important;
+        width: 100%;
+    }
+
+    .filter-section .mud-grid {
+        display: none;
+    }
+
+    .filter-section.filters-visible .mud-grid {
+        display: flex;
+    }
+
+    .desktop-cards {
+        display: none;
+    }
+
+    .mobile-cards {
+        display: block;
+    }
+
+    .program-mobile-card {
+        margin-bottom: 12px;
+        border-left: 4px solid #7e6fff;
+    }
+
+    .program-mobile-header {
+        background-color: #7e6fff;
+        color: white;
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top-right-radius: 4px;
+    }
+
+    .program-mobile-content {
+        padding: 16px;
+    }
+
+    .program-mobile-actions {
+        border-top: 1px solid rgba(0, 0, 0, 0.12);
+        display: flex;
+        gap: 8px;
+        padding: 10px 16px;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+    }
+
+        .program-mobile-actions .mud-icon-button {
+            flex: 1;
+            min-width: 0;
+        }
+
+    .program-field-label {
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 4px;
+    }
+
+    .program-field-value {
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+    }
+
+    }
+</style>
+
+<!-- Filter Section -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="4">
+            <MudTextField T="string"
+                          @bind-Value="_searchTerm"
+                          @bind-Value:after="ApplyFilters"
+                          Label="Search"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="Title, description..."
+                          Immediate="true"
+                          DebounceInterval="300"
+                          Dense="true"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_statusFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                <MudSelectItem Value="@("Pending")">Pending</MudSelectItem>
+                <MudSelectItem Value="@("Approved")">Approved</MudSelectItem>
+                <MudSelectItem Value="@("Disapproved")">Disapproved</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_categoryFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Category"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Categories</MudSelectItem>
+                <MudSelectItem Value="@("Youth Development")">Youth Development</MudSelectItem>
+                <MudSelectItem Value="@("Environment")">Environment</MudSelectItem>
+                <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                <MudSelectItem Value="@("Employment")">Employment</MudSelectItem>
+                <MudSelectItem Value="@("Health")">Health</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_areaFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Proponent Area"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Areas</MudSelectItem>
+                @foreach (var area in _areas)
+                {
+                    <MudSelectItem Value="@area">@area</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_editAccessFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Edit Access"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All</MudSelectItem>
+                <MudSelectItem Value="@("Requested")">Requested</MudSelectItem>
+                <MudSelectItem Value="@("Granted")">Granted</MudSelectItem>
+                <MudSelectItem Value="@("None")">No Requests</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Showing @_pagedPrograms.Count of @_filteredPrograms.Count programs/projects
+                </MudText>
+                @if (HasActiveFilters())
+                {
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="ClearFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Elevation="0" Class="pa-4">
+    @if (_pagedPrograms == null || !_pagedPrograms.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            @if (HasActiveFilters())
+            {
+                <text>No programs/projects found matching your filters.</text>
+            }
+            else
+            {
+                <text>No programs/projects submitted yet.</text>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Desktop View -->
+        <div class="desktop-cards">
+            @foreach (var program in _pagedPrograms)
+            {
+                <MudCard Class="program-card" Elevation="2">
+                    <div class="program-header">
+                        <div>
+                            <MudText Typo="Typo.h6" Style="font-weight: 600;">@program.Title</MudText>
+                            <div class="program-meta">
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(program.Status)">
+                                    @program.Status
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(program.Category)">
+                                    @program.Category
+                                </MudChip>
+                                @if (program.IsPublished)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Visibility">
+                                        Published
+                                    </MudChip>
+                                }
+                                @if (program.EditAccessRequested && !program.EditAccessGranted)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassEmpty">
+                                        Edit Requested
+                                    </MudChip>
+                                }
+                                @if (program.EditAccessGranted)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.LockOpen">
+                                        Edit Granted
+                                    </MudChip>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display: flex; align-items: center; gap: 4px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                    @program.ProposedBy (@program.ProposerPosition - @program.ProposerArea)
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display: flex; align-items: center; gap: 4px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Size="Size.Small" />
+                                    @program.DateCreated.ToString("MMM dd, yyyy")
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display: flex; align-items: center; gap: 4px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Size="Size.Small" />
+                                    ₱@program.Budget.ToString("N2")
+                                </MudText>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                           Color="Color.Info"
+                                           Size="Size.Small"
+                                           OnClick="@(() => ViewDetails(program))"
+                                           Title="View Details" />
+
+                            @if (program.EditAccessRequested && !program.EditAccessGranted)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.LockOpen"
+                                               Color="Color.Success"
+                                               Size="Size.Small"
+                                               OnClick="@(() => GrantEditAccess(program))"
+                                               Title="Grant Edit Access" />
+                            }
+
+                            <MudIconButton Icon="@Icons.Material.Filled.RateReview"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           OnClick="@(() => ReviewProgram(program))"
+                                           Title="Review" />
+                        </div>
+                    </div>
+                    <div class="program-body">
+                        <MudText Typo="Typo.body2" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                            @program.Description
+                        </MudText>
+                        @if (!string.IsNullOrEmpty(program.AdminFeedback))
+                        {
+                            <MudAlert Severity="@(program.Status == "Approved" ? Severity.Success : Severity.Warning)" Class="mt-2" Dense="true">
+                                <strong>Admin Feedback:</strong> @program.AdminFeedback
+                            </MudAlert>
+                        }
+                    </div>
+                </MudCard>
+            }
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="mobile-cards">
+            @for (int i = 0; i < _pagedPrograms.Count; i++)
+            {
+                var program = _pagedPrograms[i];
+                var index = (_currentPage - 1) * _pageSize + i + 1;
+
+                <MudCard Class="program-mobile-card" Elevation="2">
+                    <div class="program-mobile-header">
+                        <span><strong>Program #@index</strong></span>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@GetStatusColor(program.Status)"
+                                 Style="background: rgba(255,255,255,0.3); color: white;">
+                            @program.Status
+                        </MudChip>
+                    </div>
+                    <div class="program-mobile-content">
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Title:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="program-field-value">
+                            @program.Title
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Category:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="program-field-value">
+                            <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(program.Category)">
+                                @program.Category
+                            </MudChip>
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Proposed By:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="program-field-value">
+                            @program.ProposedBy (@program.ProposerPosition - @program.ProposerArea)
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Date Created:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="program-field-value">
+                            @program.DateCreated.ToString("MMM dd, yyyy")
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Budget:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="program-field-value">
+                            ₱@program.Budget.ToString("N2")
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="program-field-label">
+                            <strong>Description:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="program-field-value">
+                            @program.Description
+                        </MudText>
+
+                        @if (program.EditAccessRequested || program.EditAccessGranted || program.IsPublished)
+                        {
+                            <MudText Typo="Typo.body2" Class="program-field-label">
+                                <strong>Status Tags:</strong>
+                            </MudText>
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;">
+                                @if (program.IsPublished)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Visibility">
+                                        Published
+                                    </MudChip>
+                                }
+                                @if (program.EditAccessRequested && !program.EditAccessGranted)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassEmpty">
+                                        Edit Requested
+                                    </MudChip>
+                                }
+                                @if (program.EditAccessGranted)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.LockOpen">
+                                        Edit Granted
+                                    </MudChip>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(program.AdminFeedback))
+                        {
+                            <MudAlert Severity="@(program.Status == "Approved" ? Severity.Success : Severity.Warning)" Dense="true">
+                                <strong>Admin Feedback:</strong> @program.AdminFeedback
+                            </MudAlert>
+                        }
+                    </div>
+                    <div class="program-mobile-actions">
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.Visibility"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ViewDetails(program))" />
+                        @if (program.EditAccessRequested && !program.EditAccessGranted)
+                        {
+                            <MudIconButton Variant="Variant.Filled"
+                                           Icon="@Icons.Material.Filled.LockOpen"
+                                           Color="Color.Success"
+                                           Size="Size.Small"
+                                           OnClick="@(() => GrantEditAccess(program))" />
+                        }
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.RateReview"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ReviewProgram(program))" />
+                    </div>
+                </MudCard>
+            }
+        </div>
+
+        <div style="display: flex; justify-content: center; margin-top: 24px;">
+            <MudPagination Count="@_totalPages"
+                           Selected="@_currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           ShowFirstButton="true"
+                           ShowLastButton="true" />
+        </div>
+    }
+</MudPaper>
+
+@code {
+    private bool _showFilters = false;
+    private List<ProgramProject> _allPrograms = new();
+    private List<ProgramProject> _filteredPrograms = new();
+    private List<ProgramProject> _pagedPrograms = new();
+    private List<string> _areas = new();
+    private bool _initialized = false;
+
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "All";
+    private string _categoryFilter = "All";
+    private string _areaFilter = "All";
+    private string _editAccessFilter = "All";
+
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int _totalPages = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await UserState.InitializeAsync();
+            await LoadPrograms();
+        }
+    }
+
+    private async Task LoadPrograms()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _allPrograms = await db.ProgramsProjects
+            .OrderByDescending(p => p.DateCreated)
+            .AsNoTracking()
+            .ToListAsync();
+
+        _areas = _allPrograms
+            .Select(p => p.ProposerArea)
+            .Distinct()
+            .OrderBy(a => a)
+            .ToList();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredPrograms = _allPrograms;
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredPrograms = _filteredPrograms.Where(p =>
+                (p.Title?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (p.Description?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+
+        if (_statusFilter != "All")
+        {
+            _filteredPrograms = _filteredPrograms.Where(p => p.Status == _statusFilter).ToList();
+        }
+
+        if (_categoryFilter != "All")
+        {
+            _filteredPrograms = _filteredPrograms.Where(p => p.Category == _categoryFilter).ToList();
+        }
+
+        if (_areaFilter != "All")
+        {
+            _filteredPrograms = _filteredPrograms.Where(p => p.ProposerArea == _areaFilter).ToList();
+        }
+
+        if (_editAccessFilter != "All")
+        {
+            _filteredPrograms = _editAccessFilter switch
+            {
+                "Requested" => _filteredPrograms.Where(p => p.EditAccessRequested && !p.EditAccessGranted).ToList(),
+                "Granted" => _filteredPrograms.Where(p => p.EditAccessGranted).ToList(),
+                "None" => _filteredPrograms.Where(p => !p.EditAccessRequested).ToList(),
+                _ => _filteredPrograms
+            };
+        }
+
+        _currentPage = 1;
+        UpdatePagination();
+    }
+
+    private void UpdatePagination()
+    {
+        _totalPages = (int)Math.Ceiling(_filteredPrograms.Count / (double)_pageSize);
+        if (_totalPages == 0) _totalPages = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _pagedPrograms = _filteredPrograms.Skip(skip).Take(_pageSize).ToList();
+        StateHasChanged();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+        UpdatePagination();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _statusFilter = "All";
+        _categoryFilter = "All";
+        _areaFilter = "All";
+        _editAccessFilter = "All";
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _statusFilter != "All" ||
+               _categoryFilter != "All" ||
+               _areaFilter != "All" ||
+               _editAccessFilter != "All";
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Approved" => Color.Success,
+        "Disapproved" => Color.Error,
+        _ => Color.Default
+    };
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Youth Development" => Color.Primary,
+        "Environment" => Color.Success,
+        "Sports" => Color.Info,
+        "Employment" => Color.Warning,
+        "Health" => Color.Error,
+        _ => Color.Default
+    };
+
+    private async Task ViewDetails(ProgramProject program)
+    {
+        var parameters = new DialogParameters { { "Program", program } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<ViewProgramProjectDetails>("Program/Project Details", parameters, options);
+    }
+
+    private async Task ReviewProgram(ProgramProject program)
+    {
+        var parameters = new DialogParameters { { "ProgramToReview", program } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AdminReviewProgramProjectForm>("Review Program/Project", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadPrograms();
+            Snackbar.Add("Review submitted successfully!", Severity.Success);
+        }
+    }
+
+    private async Task GrantEditAccess(ProgramProject program)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Grant edit access to '{program.ProposedBy}' for '{program.Title}'?" },
+            { "ButtonText", "Grant Access" },
+            { "Color", Color.Success }
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Grant Access", parameters);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var programInDb = await db.ProgramsProjects.FindAsync(program.Id);
+            if (programInDb != null)
+            {
+                programInDb.EditAccessGranted = true;
+                programInDb.EditAccessGrantedDate = DateTime.Now;
+                programInDb.EditAccessGrantedBy = UserState.Fullname;
+                await db.SaveChangesAsync();
+                await LoadPrograms();
+                Snackbar.Add("Edit access granted successfully!", Severity.Success);
+            }
+        }
+    }
+}

@@ -1,0 +1,77 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+@inject UserStateService UserState
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        REQUEST EDIT ACCESS
+    </TitleContent>
+
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Class="mb-3">
+            This will notify the admin to grant you access to edit this proposal.
+        </MudAlert>
+
+        <MudText Typo="Typo.body1" Class="mb-2">
+            <strong>Program/Project:</strong> @ProgramToEdit.Title
+        </MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            <strong>Current Status:</strong> @ProgramToEdit.Status
+        </MudText>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSending">
+            @if (_isSending)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Sending...</span>
+            }
+            else
+            {
+                <span>Request Access</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _isSending = false;
+
+    [Parameter] public ProgramProject ProgramToEdit { get; set; } = default!;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private async Task Submit()
+    {
+        _isSending = true;
+
+        try
+        {
+            var programInDb = await Db.ProgramsProjects.FindAsync(ProgramToEdit.Id);
+            if (programInDb != null)
+            {
+                programInDb.EditAccessRequested = true;
+                programInDb.EditAccessRequestedDate = DateTime.Now;
+                programInDb.EditAccessGranted = false;
+
+                await Db.SaveChangesAsync();
+                Snackbar.Add("Edit access request sent to admin!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error sending request: {ex.Message}", Severity.Error);
+            _isSending = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

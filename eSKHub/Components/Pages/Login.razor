@@ -1,0 +1,281 @@
+﻿@page "/login"
+@layout eSKHub.Components.Layout.LoginLayout
+
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Model
+@using eSKHub.Components.Model
+@using eSKHub.Services
+@using System.Security.Cryptography;
+@using eSKHub.Components.Pages.Dialogs
+@using System.Text;
+
+@inject NavigationManager NavigationManager
+@inject AppDbContext Db
+@inject UserStateService UserState
+@inject IDialogService DialogService
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<style>
+    .login-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        color: white;
+        border-radius: 4px 4px 0 0;
+    }
+
+        .login-header img {
+            height: 60px;
+            margin-right: 10px;
+        }
+
+    .login-header-text {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+</style>
+
+<div class="d-flex justify-center align-center login-panel" style="height: 85vh;">
+    <div class="login-wrapper" style="width: 100%; max-width: 350px;">
+
+        <!-- 🌫️ Glass Wrapper with proper class application -->
+        <MudPaper Class="@($"login-glass-wrapper {(IsDarkMode ? "public-glass-dark" : "public-glass-light")}")"
+                  Elevation="0"
+                  Style="border-radius:14px; overflow:hidden;">
+
+            <!-- 🔹 Login Card (transparent for blur) -->
+            <MudCard Elevation="0" Class="@($"pa-2 {(IsDarkMode ? "public-glass-dark" : "public-glass-light")}")" Style="width: 100%;">
+                <!-- Top Logo Section -->
+                <div class="top-logo-section" style="cursor: pointer;" @onclick="@(() => NavigationManager.NavigateTo("/"))">
+                    <div class="sk-logo">
+                        <img src="website/eskhublogo.png" />
+                    </div>
+                    <div class="logo-text">
+                        <h1>eSKHub Bacacay</h1>
+                        <p>Empowering Youth, Building Tomorrow</p>
+                    </div>
+                    <div>
+                        <MudIconButton Icon="@DarkLightModeButtonIcon"
+                                       Color="Color.Inherit"
+                                       OnClick="@HandleDarkModeToggle" />
+                    </div>
+                </div>
+                <MudDivider Style="border-color: var(--mud-palette-secondary); border-width: 1px;" />
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <div class="d-flex align-center justify-space-between" style="width:100%;">
+                            <MudText Typo="Typo.h6">Sign In</MudText>
+
+                            <div class="d-flex align-center" style="gap: 4px;">
+
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                                               Color="Color.Inherit"
+                                               Size="Size.Small"
+                                               Title="Back to Home"
+                                               OnClick="@(() => NavigationManager.NavigateTo("/"))" />
+                            </div>
+                        </div>
+                    </CardHeaderContent>
+                </MudCardHeader>
+
+                <MudCardContent>
+                    <MudForm>
+
+                        <MudTextField T="string"
+                                      @bind-Value="Username"
+                                      Label="Username"
+                                      Required="true"
+                                      RequiredError="Username is required!" />
+
+                        <MudTextField T="string"
+                                      @bind-Value="Password"
+                                      Label="Password"
+                                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                      Required="true"
+                                      RequiredError="Password is required!"
+                                      Adornment="Adornment.End"
+                                      AdornmentIcon="@(_showPassword
+                                                                                  ? Icons.Material.Filled.VisibilityOff
+                                                                                  : Icons.Material.Filled.Visibility)"
+                                      OnAdornmentClick="TogglePasswordVisibility" />
+
+                        <MudText Class="text-error mt-2">
+                            @ErrorMessage
+                        </MudText>
+
+                        <div class="d-flex align-center justify-space-between mt-4">
+                            <MudButton Style="color: #764ba2;"
+                                       Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       OnClick="OpenOtpDialog">
+                                Forgot Password?
+                            </MudButton>
+
+                            <MudIconButton Style="color: #764ba2;"
+                                           Class="ml-auto"
+                                           Disabled="@isLoading"
+                                           OnClick="LoginUser">
+                                @if (isLoading)
+                                {
+                                    <MudProgressCircular Color="Color.Primary"
+                                                         Size="Size.Small"
+                                                         Indeterminate="true"
+                                                         Class="me-2" />
+                                    <span>Logging in...</span>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Login" />
+                                }
+                            </MudIconButton>
+                        </div>
+
+                        <div class="d-flex justify-center mt-3">
+                            <MudButton Variant="Variant.Text"
+                                       Size="Size.Small"
+                                       OnClick="OpenYouthLoginDialog"
+                                       Style="color: #764ba2; text-transform: none;">
+                                Registered Youth?
+                            </MudButton>
+                        </div>
+
+                    </MudForm>
+                </MudCardContent>
+            </MudCard>
+        </MudPaper>
+    </div>
+</div>
+
+
+@code {
+    private string Username { get; set; } = string.Empty;
+    private string Password { get; set; } = string.Empty;
+    private string ErrorMessage { get; set; } = string.Empty;
+    private bool isLoading = false;
+    private bool _showPassword = false;
+
+    // Cascading parameters from LoginLayout
+    [CascadingParameter(Name = "IsDarkMode")]
+    public bool IsDarkMode { get; set; }
+
+    [CascadingParameter(Name = "DarkModeToggle")]
+    public EventCallback DarkModeToggle { get; set; }
+
+    [CascadingParameter(Name = "DarkLightModeButtonIcon")]
+    public string DarkLightModeButtonIcon { get; set; } = string.Empty;
+
+    private async Task HandleDarkModeToggle()
+    {
+        if (DarkModeToggle.HasDelegate)
+        {
+            await DarkModeToggle.InvokeAsync();
+        }
+    }
+
+    private static string HashPassword(string password)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = Encoding.UTF8.GetBytes(password);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToBase64String(hash);
+    }
+
+    private void TogglePasswordVisibility() => _showPassword = !_showPassword;
+
+    private async Task LoginUser()
+    {
+        if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
+        {
+            ErrorMessage = "Username and Password are required.";
+            return;
+        }
+
+        isLoading = true;
+        ErrorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var user = await db.Users
+                .FirstOrDefaultAsync(u => u.Username == Username);
+
+            if (user == null)
+            {
+                ErrorMessage = "Invalid username.";
+                return;
+            }
+
+            var hashedPassword = HashPassword(Password);
+
+            if (user.Password != hashedPassword)
+            {
+                ErrorMessage = "Incorrect password.";
+                return;
+            }
+
+            await UserState.Login(user.Username);
+            await UserState.SetFullname(user.Fullname);
+            await UserState.SetRole(user.Role);
+            await UserState.SetPosition(user.Position);
+            await UserState.SetArea(user.Area);
+
+            // Navigate based on role
+            if (user.Role == "Admin")
+            {
+                NavigationManager.NavigateTo("/dashboard");
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/council/home");
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Login error: {ex.Message}";
+
+            if (ex.InnerException?.Message?.Contains("network") == true ||
+                ex.InnerException?.Message?.Contains("connection") == true)
+            {
+                ErrorMessage = "Database connection error. Please check if SQL Server is running.";
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenOtpDialog()
+    {
+        var options = new DialogOptions()
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false,
+            NoHeader = false,
+            CloseButton = true
+        };
+        var dialog = await DialogService.ShowAsync<OTPVerify>("Forgot Password", options);
+        await dialog.Result;
+    }
+    private async Task OpenYouthLoginDialog()
+    {
+        var options = new DialogOptions()
+        {
+            CloseOnEscapeKey = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false,
+            NoHeader = false,
+            CloseButton = true
+        };
+        var dialog = await DialogService.ShowAsync<YouthLoginDialog>("Youth Login", options);
+        await dialog.Result;
+    }
+}

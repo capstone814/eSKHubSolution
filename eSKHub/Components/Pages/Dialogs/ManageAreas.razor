@@ -1,0 +1,353 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Dialogs
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        MANAGE AREAS
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="8">
+                    <MudTextField T="string"
+                                  Label="Area Name"
+                                  @bind-Value="_newAreaName"
+                                  Required="true"
+                                  RequiredError="Area name is required"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudRadioGroup T="string" @bind-Value="_newAreaType" Required="true">
+                        <MudRadio T="string" Value="@("Municipality")" Color="Color.Primary">Municipality</MudRadio>
+                        <MudRadio T="string" Value="@("Barangay")" Color="Color.Secondary">Barangay</MudRadio>
+                    </MudRadioGroup>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudButton Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               FullWidth="true"
+                               OnClick="AddArea"
+                               Disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Adding...</span>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-2" />
+                            <span>Add Area</span>
+                        }
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+
+        <MudDivider Class="my-4" />
+
+        <MudText Typo="Typo.h6" Class="mb-3">Existing Areas (@_totalCount)</MudText>
+
+        <!-- Search and Filter Controls -->
+        <MudGrid Spacing="2" Class="mb-3">
+            <MudItem xs="12" sm="8">
+                <MudTextField T="string"
+                              @bind-Value="_searchTerm"
+                              @bind-Value:after="OnSearchChanged"
+                              Label="Search Areas"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true"
+                              DebounceInterval="300" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="string"
+                           @bind-Value="_filterType"
+                           @bind-Value:after="OnFilterChanged"
+                           Label="Filter by Type"
+                           Variant="Variant.Outlined">
+                    <MudSelectItem Value="@("All")">All</MudSelectItem>
+                    <MudSelectItem Value="@("Municipality")">Municipality</MudSelectItem>
+                    <MudSelectItem Value="@("Barangay")">Barangay</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        @if (_isLoading)
+        {
+            <div style="display: flex; justify-content: center; padding: 20px;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (_filteredAreas == null || !_filteredAreas.Any())
+        {
+            <MudAlert Severity="Severity.Info">
+                @if (string.IsNullOrWhiteSpace(_searchTerm) && _filterType == "All")
+                {
+                    <text>No areas configured yet.</text>
+                }
+                else
+                {
+                    <text>No areas found matching your search.</text>
+                }
+            </MudAlert>
+        }
+        else
+        {
+            <!-- Use MudTable for better performance with many items -->
+            <MudTable Items="_filteredAreas"
+                      Dense="true"
+                      Hover="true"
+                      Breakpoint="Breakpoint.Sm"
+                      Loading="@_isLoading"
+                      FixedHeader="true"
+                      Height="400px">
+                <HeaderContent>
+                    <MudTh>Type</MudTh>
+                    <MudTh>Name</MudTh>
+                    <MudTh Style="text-align: right;">Actions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Type">
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Color="@(context.Type == "Municipality" ? Color.Primary : Color.Secondary)">
+                            @context.Type
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Name">@context.Name</MudTd>
+                    <MudTd DataLabel="Actions" Style="text-align: right;">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => EditArea(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeleteArea(context))" />
+                    </MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+                </PagerContent>
+            </MudTable>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+    private bool _isLoading = false;
+    private string _newAreaName = string.Empty;
+    private string _newAreaType = "";
+    private List<Area> _areas = new();
+    private List<Area> _filteredAreas = new();
+    private string _searchTerm = string.Empty;
+    private string _filterType = "All";
+    private int _totalCount = 0;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAreas();
+    }
+
+    private async Task LoadAreas()
+    {
+        _isLoading = true;
+
+        try
+        {
+            // Load all areas from database
+            _areas = await Db.Areas
+                .OrderBy(a => a.Type)
+                .ThenBy(a => a.Name)
+                .AsNoTracking()
+                .ToListAsync();
+
+            _totalCount = _areas.Count;
+
+            // Apply filters
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading areas: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredAreas = _areas;
+
+        // Apply type filter
+        if (_filterType != "All")
+        {
+            _filteredAreas = _filteredAreas.Where(a => a.Type == _filterType).ToList();
+        }
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredAreas = _filteredAreas
+                .Where(a => a.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+
+    private void OnSearchChanged()
+    {
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void OnFilterChanged()
+    {
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private async Task AddArea()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        if (string.IsNullOrWhiteSpace(_newAreaName))
+        {
+            Snackbar.Add("Please enter an area name", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            var existingArea = await Db.Areas
+                .FirstOrDefaultAsync(a => a.Name.ToLower() == _newAreaName.ToLower() && a.Type == _newAreaType);
+
+            if (existingArea != null)
+            {
+                Snackbar.Add($"This {_newAreaType} already exists", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            var newArea = new Area
+            {
+                Name = _newAreaName.Trim(),
+                Type = _newAreaType
+            };
+
+            Db.Areas.Add(newArea);
+            await Db.SaveChangesAsync();
+
+            Snackbar.Add($"{_newAreaType} added successfully!", Severity.Success);
+
+            _newAreaName = string.Empty;
+            _newAreaType = "Barangay";
+
+            await LoadAreas();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding area: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task EditArea(Area area)
+    {
+        var parameters = new DialogParameters
+        {
+            { "AreaToEdit", area }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<EditArea>("Edit Area", parameters, options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadAreas();
+        }
+    }
+
+    private async Task DeleteArea(Area area)
+    {
+        // Check if area is in use before deleting
+        var usersUsingArea = await Db.Users.CountAsync(u => u.Area == area.Name);
+
+        if (usersUsingArea > 0)
+        {
+            Snackbar.Add($"Cannot delete '{area.Name}' - it is currently assigned to {usersUsingArea} user(s)", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters
+    {
+        { "ContentText", $"Are you sure you want to delete '{area.Name}'? This action cannot be undone." },
+        { "ButtonText", "Delete" },
+        { "Color", Color.Error }
+    };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true
+        };
+
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters, options);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            try
+            {
+                // Find the area by ID to get a tracked entity
+                var areaToDelete = await Db.Areas.FindAsync(area.Id);
+
+                if (areaToDelete != null)
+                {
+                    Db.Areas.Remove(areaToDelete);
+                    await Db.SaveChangesAsync();
+                    Snackbar.Add("Area deleted successfully!", Severity.Success);
+                    await LoadAreas();
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting area: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Ok(true));
+}

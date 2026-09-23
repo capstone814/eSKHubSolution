@@ -1,0 +1,275 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject eSKHub.Components.Services.ThemeService ThemeService
+@implements IDisposable
+
+<style>
+    .login-bg {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        transition: background-image 0.4s ease-in-out;
+    }
+
+        .login-bg::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url('website/SKMAINPIC.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.75;
+        }
+
+        .login-bg::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient( 135deg, #9aa7ff 0%, #b79ce6 50%, #FFCCFF 100% );
+            opacity: 0.8;
+            transition: background 0.4s ease-in-out, opacity 0.4s ease-in-out;
+        }
+
+        /* Dark mode gradient */
+        .login-bg.dark::after {
+            background: linear-gradient(135deg, #1a1a27 0%, #2d1b3d 50%, #1e1e2d 100%);
+            opacity: 0.8;
+        }
+
+    .login-logo-overlay {
+        position: absolute;
+        top: 50%;
+        left: -10%;
+        transform: translateY(-50%) scale(1.8);
+        width: 700px;
+        height: 700px;
+        background-image: url('website/eskhublogo.png');
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 0.25;
+        z-index: 2;
+        pointer-events: none;
+        transition: opacity 0.4s ease-in-out;
+    }
+
+    .public-glass-light.mud-card,
+    .public-glass-light.mud-paper-root {
+        backdrop-filter: blur(4.5px) !important;
+        border: none !important;
+    }
+
+    .public-glass-dark.mud-card,
+    .public-glass-dark.mud-paper-root {
+        backdrop-filter: blur(4.5px) !important;
+        border: none !important;
+    }
+
+    /* Force override MudBlazor theme backgrounds */
+    .public-glass-light .mud-paper,
+    .public-glass-light.mud-paper {
+        background-color: rgba(240, 147, 251, 0.15) !important;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .public-glass-dark .mud-paper,
+    .public-glass-dark.mud-paper {
+        background-color: rgba(30, 30, 45, 0.15) !important;
+        box-shadow: 0 12px 40px rgba(126, 111, 255, 0.25) !important;
+    }
+
+    /* Remove any nested backgrounds */
+    .public-glass-light .mud-card-content,
+    .public-glass-dark .mud-card-content {
+        background: transparent !important;
+    }
+
+    /* Premium floating feel */
+    .login-glass-wrapper {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    /* Optional: soften inputs on glass */
+    .mud-input-root {
+        backdrop-filter: blur(4px);
+    }
+    /* Top Logo Section for Login Card */
+    .top-logo-section {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 8px;
+        transition: transform 0.2s ease;
+    }
+
+        .top-logo-section:hover {
+            transform: scale(1.02);
+        }
+
+    .sk-logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .sk-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+    .logo-text h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
+        color: inherit;
+    }
+
+    .logo-text p {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    .top-logo-section > div:last-child .mud-icon-button {
+        padding: 0 !important;
+        margin: 0 !important;
+        min-width: auto !important;
+    }
+    @@media (max-width: 600px) {
+        .login-logo-overlay {
+            left: -71%;
+            transform: translateY(-50%) scale(1.2);
+            width: 600px;
+            height: 600px;
+            opacity: 0.4;
+        }
+    }
+</style>
+
+<MudThemeProvider Theme="@_theme" IsDarkMode="ThemeService.IsDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<!-- ✅ BACKGROUND IMAGE -->
+<div class="@($"login-bg {(ThemeService.IsDarkMode ? "dark" : "light")}")">
+    <div class="login-logo-overlay"></div>
+</div>
+
+<MudLayout>
+    <MudMainContent Class="pa-4">
+        <CascadingValue Value="ThemeService.IsDarkMode" Name="IsDarkMode">
+            <CascadingValue Value="EventCallback.Factory.Create(this, DarkModeToggle)" Name="DarkModeToggle">
+                <CascadingValue Value="DarkLightModeButtonIcon" Name="DarkLightModeButtonIcon">
+                    @Body
+                </CascadingValue>
+            </CascadingValue>
+        </CascadingValue>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private MudTheme? _theme = null;
+    private bool _initialized = false;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        SetTheme();
+        ThemeService.OnThemeChanged += OnThemeChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            await ThemeService.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void OnThemeChanged()
+    {
+        StateHasChanged();
+    }
+
+    private async Task DarkModeToggle()
+    {
+        await ThemeService.ToggleDarkModeAsync();
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged;
+    }
+
+    private void SetTheme()
+    {
+        _theme = new MudTheme
+        {
+            PaletteLight = _lightPalette,
+            PaletteDark = _darkPalette,
+            LayoutProperties = new LayoutProperties()
+        };
+    }
+
+    private readonly PaletteLight _lightPalette = new()
+    {
+        Black = "#110e2d",
+        AppbarText = "#424242",
+        AppbarBackground = "rgba(255,255,255,0.8)",
+        DrawerBackground = "#FFCCFF",
+        GrayLight = "#e8e8e8",
+        GrayLighter = "#f9f9f9",
+        Background = "#FFCCFF"
+    };
+
+    private readonly PaletteDark _darkPalette = new()
+    {
+        Primary = "#7e6fff",
+        Surface = "#1e1e2d",
+        Background = "#1a1a27",
+        BackgroundGray = "#151521",
+        AppbarText = "#92929f",
+        AppbarBackground = "rgba(26,26,39,0.8)",
+        DrawerBackground = "#1a1a27",
+        ActionDefault = "#74718e",
+        ActionDisabled = "#9999994d",
+        ActionDisabledBackground = "#605f6d4d",
+        TextPrimary = "#b2b0bf",
+        TextSecondary = "#92929f",
+        TextDisabled = "#ffffff33",
+        DrawerIcon = "#92929f",
+        DrawerText = "#92929f",
+        GrayLight = "#2a2833",
+        GrayLighter = "#1e1e2d",
+        Info = "#4a86ff",
+        Success = "#3dcb6c",
+        Warning = "#ffb545",
+        Error = "#ff3f5f",
+        LinesDefault = "#33323e",
+        TableLines = "#33323e",
+        Divider = "#292838",
+        OverlayLight = "#1e1e2d80",
+    };
+
+    public string DarkLightModeButtonIcon => ThemeService.IsDarkMode
+        ? Icons.Material.Rounded.AutoMode
+        : Icons.Material.Outlined.DarkMode;
+}

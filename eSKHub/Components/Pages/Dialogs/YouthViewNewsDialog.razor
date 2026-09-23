@@ -1,0 +1,108 @@
+﻿@using eSKHub.Components.Model
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        NEWS ARTICLE
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3">
+            <div>
+                <MudText Typo="Typo.h4" Style="font-weight: 600; margin-bottom: 8px;">@NewsToView.Title</MudText>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <MudChip T="string" Size="Size.Small" Color="@GetNewsTypeColor(NewsToView.NewsType)">
+                        @NewsToView.NewsType
+                    </MudChip>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Published on @NewsToView.DateCreated.ToString("MMMM dd, yyyy")
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(NewsToView.Author))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            by @NewsToView.Author
+                        </MudText>
+                    }
+                </div>
+            </div>
+
+            <MudDivider />
+
+            @if (NewsToView.AttachmentData != null && NewsToView.AttachmentData.Length > 0 && NewsToView.AttachmentType == "image")
+            {
+                <img src="@GetAttachmentPath()" alt="News image" style="width: 100%; max-height: 400px; object-fit: cover; border-radius: 8px;" />
+            }
+
+            <MudText Typo="Typo.subtitle1" Style="font-style: italic; font-weight: 500;">
+                @NewsToView.Summary
+            </MudText>
+
+            <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.8;">
+                @NewsToView.Content
+            </MudText>
+
+            @if (NewsToView.AttachmentData != null && NewsToView.AttachmentData.Length > 0 && NewsToView.AttachmentType != "image")
+            {
+                <div>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Download"
+                               OnClick="DownloadAttachment">
+                        Download Attachment
+                    </MudButton>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(NewsToView.Author))
+            {
+                <MudDivider />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <strong>Written by:</strong> @NewsToView.Author (@NewsToView.AuthorPosition - @NewsToView.AuthorArea)
+                </MudText>
+            }
+        </MudStack>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Primary">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public NewsArticle NewsToView { get; set; } = default!;
+
+    private Color GetNewsTypeColor(string newsType) => newsType switch
+    {
+        "Breaking" => Color.Error,
+        "Feature" => Color.Primary,
+        "Community" => Color.Success,
+        "Event" => Color.Info,
+        "Achievement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private string GetAttachmentPath()
+    {
+        if (NewsToView.AttachmentData != null && !string.IsNullOrEmpty(NewsToView.AttachmentMimeType))
+        {
+            return $"data:{NewsToView.AttachmentMimeType};base64,{Convert.ToBase64String(NewsToView.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (NewsToView.AttachmentData != null && !string.IsNullOrEmpty(NewsToView.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(NewsToView.AttachmentData);
+            var fileName = NewsToView.Attachment ?? "document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, NewsToView.AttachmentMimeType, base64);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

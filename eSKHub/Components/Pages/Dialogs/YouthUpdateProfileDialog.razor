@@ -1,0 +1,390 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using System.Text.RegularExpressions
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Formats.Png
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<style>
+    .youth-update-dialog .mud-dialog-content {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    .upload-section {
+        text-align: center;
+        margin-bottom: 16px;
+    }
+
+    .section-header {
+        font-weight: 600;
+        color: var(--mud-palette-primary);
+        margin: 16px 0 8px 0;
+        padding-bottom: 4px;
+        border-bottom: 2px solid var(--mud-palette-primary);
+    }
+
+    .readonly-field {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+</style>
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Class="youth-update-dialog" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        UPDATE PROFILE
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_youth">
+            <div class="upload-section">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Upload Profile Photo (Optional)</MudText>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; position: relative;">
+                    @if (!string.IsNullOrEmpty(_imagePreviewUrl))
+                    {
+                        <label for="upload-youth-image-update" style="position: absolute; top: 10px; z-index: 2; opacity: 0.5; cursor: pointer;">
+                            <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Large" />
+                        </label>
+                        <img src="@_imagePreviewUrl" alt="Preview" style="max-height: 150px; max-width:150px; border-radius: 6px;" />
+                    }
+                    else
+                    {
+                        <label for="upload-youth-image-update" style="cursor: pointer;">
+                            <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="MudBlazor.Color.Primary" Size="MudBlazor.Size.Large" />
+                        </label>
+                    }
+                    <InputFile id="upload-youth-image-update" OnChange="OnFileChanged" accept="image/*" style="display: none;" />
+                </div>
+            </div>
+
+            <MudText Typo="Typo.subtitle1" Class="section-header">Personal Information</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" Label="First Name" @bind-Value="_youth.FirstName"
+                                  Required="true" RequiredError="First name is required"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" Label="Middle Name (Optional)" @bind-Value="_youth.MiddleName"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" Label="Last Name" @bind-Value="_youth.LastName"
+                                  Required="true" RequiredError="Last name is required"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker Label="Date of Birth" @bind-Date="_dateOfBirth"
+                                   Required="true" MaxDate="DateTime.Today.AddYears(-15)" MinDate="DateTime.Today.AddYears(-30)"
+                                   Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Gender" @bind-Value="_youth.Gender"
+                               Required="true" RequiredError="Gender is required"
+                               Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("Male")">Male</MudSelectItem>
+                        <MudSelectItem Value="@("Female")">Female</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">Other</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="string" Label="Civil Status" @bind-Value="_youth.CivilStatus"
+                               Required="true" RequiredError="Civil status is required"
+                               Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("Single")">Single</MudSelectItem>
+                        <MudSelectItem Value="@("Married")">Married</MudSelectItem>
+                        <MudSelectItem Value="@("Widowed")">Widowed</MudSelectItem>
+                        <MudSelectItem Value="@("Separated")">Separated</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle1" Class="section-header">Contact Information</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Email" @bind-Value="_youth.Email"
+                                  Required="true" RequiredError="Email is required"
+                                  Validation="@(new Func<string, string?>(ValidateEmail))"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Contact Number" @bind-Value="_youth.ContactNumber"
+                                  Required="true" RequiredError="Contact number is required"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Barangay" Value="@_youth.Barangay"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense"
+                                  ReadOnly="true" Class="readonly-field"
+                                  HelperText="Contact admin to update barangay" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Complete Address" Value="@_youth.Address"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense"
+                                  ReadOnly="true" Class="readonly-field"
+                                  HelperText="Contact admin to update address" />
+                </MudItem>
+            </MudGrid>
+
+            <MudAlert Severity="Severity.Info" Class="mt-2 mb-3" Dense="true">
+                To update your Barangay or Address, please contact the administrator through submit feedback section.
+            </MudAlert>
+
+            <MudText Typo="Typo.subtitle1" Class="section-header">Educational & Work Information</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Educational Attainment" @bind-Value="_youth.EducationalAttainment"
+                               Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                        <MudSelectItem Value="@("")">Not Specified</MudSelectItem>
+                        <MudSelectItem Value="@("Elementary")">Elementary</MudSelectItem>
+                        <MudSelectItem Value="@("High School")">High School</MudSelectItem>
+                        <MudSelectItem Value="@("College")">College</MudSelectItem>
+                        <MudSelectItem Value="@("Vocational")">Vocational</MudSelectItem>
+                        <MudSelectItem Value="@("Graduate")">Graduate</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Current School (Optional)" @bind-Value="_youth.CurrentSchool"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string" Label="Occupation (Optional)" @bind-Value="_youth.Occupation"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle1" Class="section-header">Additional Information</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Skills (comma-separated)" @bind-Value="_youth.Skills"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense"
+                                  Placeholder="e.g., Photography, Writing, Sports" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Interests (comma-separated)" @bind-Value="_youth.Interests"
+                                  Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense"
+                                  Placeholder="e.g., Arts, Technology, Environment" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox @bind-Value="_youth.IsVoter" Label="Registered Voter" Color="MudBlazor.Color.Primary" Dense="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox @bind-Value="_youth.IsSKVoter" Label="SK Voter" Color="MudBlazor.Color.Primary" Dense="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudCheckBox @bind-Value="_youth.WillingToVolunteer" Label="Willing to Volunteer" Color="MudBlazor.Color.Primary" Dense="true" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="MudBlazor.Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="MudBlazor.Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Changes</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+    [Parameter] public int YouthId { get; set; }
+
+    private Youth _youth = new();
+    private DateTime? _dateOfBirth;
+
+    private string? _imagePreviewUrl;
+    private byte[]? _imageBytes;
+    private string? _imageMimeType;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var youth = await db.Youths.FindAsync(YouthId);
+
+        if (youth != null)
+        {
+            _youth = new Youth
+            {
+                Id = youth.Id,
+                FirstName = youth.FirstName,
+                MiddleName = youth.MiddleName,
+                LastName = youth.LastName,
+                DateOfBirth = youth.DateOfBirth,
+                Gender = youth.Gender,
+                CivilStatus = youth.CivilStatus,
+                Email = youth.Email,
+                ContactNumber = youth.ContactNumber,
+                Barangay = youth.Barangay,
+                Address = youth.Address,
+                EducationalAttainment = youth.EducationalAttainment,
+                CurrentSchool = youth.CurrentSchool,
+                Occupation = youth.Occupation,
+                IsVoter = youth.IsVoter,
+                IsSKVoter = youth.IsSKVoter,
+                WillingToVolunteer = youth.WillingToVolunteer,
+                Skills = youth.Skills,
+                Interests = youth.Interests,
+                Status = youth.Status,
+                ImageData = youth.ImageData,
+                ImageMimeType = youth.ImageMimeType
+            };
+
+            _dateOfBirth = youth.DateOfBirth;
+
+            if (_youth.ImageData != null && !string.IsNullOrEmpty(_youth.ImageMimeType))
+            {
+                _imagePreviewUrl = $"data:{_youth.ImageMimeType};base64,{Convert.ToBase64String(_youth.ImageData)}";
+            }
+        }
+    }
+
+    private string? ValidateEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return "Email is required";
+
+        var emailPattern = @"^[^@\s]+@[^@\s]+\.[^@\s]+$";
+        if (!Regex.IsMatch(email, emailPattern, RegexOptions.IgnoreCase))
+            return "Enter a valid email address";
+
+        return null;
+    }
+
+    private async Task OnFileChanged(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file.Size > 5 * 1024 * 1024)
+        {
+            Snackbar.Add("Image size must be less than 5MB", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var inputStream = file.OpenReadStream(5 * 1024 * 1024);
+            using var image = await Image.LoadAsync(inputStream);
+
+            image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+            {
+                Size = new SixLabors.ImageSharp.Size(300, 300),
+                Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
+            }));
+
+            using var ms = new MemoryStream();
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            bool isPng = extension == ".png";
+
+            if (isPng)
+            {
+                var encoder = new PngEncoder { CompressionLevel = PngCompressionLevel.BestCompression };
+                await image.SaveAsync(ms, encoder);
+                _imageMimeType = "image/png";
+                _imagePreviewUrl = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+            }
+            else
+            {
+                var encoder = new JpegEncoder { Quality = 70 };
+                await image.SaveAsync(ms, encoder);
+                _imageMimeType = "image/jpeg";
+                _imagePreviewUrl = $"data:image/jpeg;base64,{Convert.ToBase64String(ms.ToArray())}";
+            }
+
+            _imageBytes = ms.ToArray();
+            Snackbar.Add($"Image uploaded ({_imageBytes.Length / 1024}KB)", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error processing image: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid || !_dateOfBirth.HasValue)
+        {
+            if (!_dateOfBirth.HasValue)
+                Snackbar.Add("Date of birth is required", Severity.Warning);
+            else
+                Snackbar.Add("Please fill in all required fields", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var normalizedEmail = _youth.Email.Trim().ToLower();
+
+            var existingEmail = await db.Youths
+                .FirstOrDefaultAsync(y => y.Id != _youth.Id &&
+                                        y.Email.ToLower().Trim() == normalizedEmail);
+
+            if (existingEmail != null)
+            {
+                Snackbar.Add("This email is already registered to another youth.", Severity.Warning);
+                _isSaving = false;
+                return;
+            }
+
+            var youthInDb = await db.Youths.FindAsync(_youth.Id);
+            if (youthInDb != null)
+            {
+                youthInDb.FirstName = _youth.FirstName;
+                youthInDb.MiddleName = _youth.MiddleName;
+                youthInDb.LastName = _youth.LastName;
+                youthInDb.DateOfBirth = _dateOfBirth.Value;
+                youthInDb.Gender = _youth.Gender;
+                youthInDb.CivilStatus = _youth.CivilStatus;
+                youthInDb.Email = normalizedEmail;
+                youthInDb.ContactNumber = _youth.ContactNumber;
+                // Barangay and Address are NOT updated here
+                youthInDb.EducationalAttainment = _youth.EducationalAttainment;
+                youthInDb.CurrentSchool = _youth.CurrentSchool;
+                youthInDb.Occupation = _youth.Occupation;
+                youthInDb.IsVoter = _youth.IsVoter;
+                youthInDb.IsSKVoter = _youth.IsSKVoter;
+                youthInDb.WillingToVolunteer = _youth.WillingToVolunteer;
+                youthInDb.Skills = _youth.Skills;
+                youthInDb.Interests = _youth.Interests;
+                youthInDb.DateModified = DateTime.Now;
+
+                if (_imageBytes != null && !string.IsNullOrEmpty(_imageMimeType))
+                {
+                    youthInDb.ImageData = _imageBytes;
+                    youthInDb.ImageMimeType = _imageMimeType;
+                }
+
+                await db.SaveChangesAsync();
+                Snackbar.Add("Profile updated successfully!", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

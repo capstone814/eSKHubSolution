@@ -1,0 +1,390 @@
+﻿@using eSKHub.Components.Model
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+
+<style>
+    .view-youth-content {
+        color: var(--mud-palette-text-primary);
+    }
+
+    .profile-section {
+        text-align: center;
+        padding: 20px 0;
+        border-bottom: 2px solid var(--mud-palette-divider);
+        margin-bottom: 20px;
+    }
+
+    .profile-image {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #7e6fff;
+        box-shadow: 0 4px 12px rgba(126, 111, 255, 0.3);
+        margin-bottom: 12px;
+    }
+
+    .youth-name {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .youth-age-badge {
+        display: inline-block;
+        background: #7e6fff;
+        padding: 4px 16px;
+        border-radius: 20px;
+        color: white;
+        font-weight: 500;
+        font-size: 0.9rem;
+        margin: 0 4px;
+    }
+
+    .info-section {
+        margin-bottom: 20px;
+    }
+
+    .section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+        color: #7e6fff;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 8px;
+    }
+
+    .info-item {
+        padding: 12px;
+        background: rgba(126, 111, 255, 0.05);
+        border-radius: 6px;
+        border: 1px solid rgba(126, 111, 255, 0.2);
+    }
+
+    .info-label {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .info-value {
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    .status-chip {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background: #10b981;
+        color: white;
+    }
+
+    .status-inactive {
+        background: #6b7280;
+        color: white;
+    }
+
+    .badge-yes {
+        background: #10b981;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+    }
+
+    .badge-no {
+        background: #6b7280;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+    }
+
+    .skills-interests-section {
+        padding: 12px;
+        background: rgba(126, 111, 255, 0.05);
+        border-radius: 6px;
+        border: 1px solid rgba(126, 111, 255, 0.2);
+        margin-bottom: 12px;
+    }
+
+    .tag-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .tag {
+        background: #7e6fff;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .timestamps {
+        display: flex;
+        gap: 16px;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--mud-palette-divider);
+    }
+
+    .timestamp-item {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        background: rgba(126, 111, 255, 0.05);
+        border-radius: 6px;
+    }
+
+    .timestamp-label {
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .timestamp-value {
+        font-size: 0.85rem;
+    }
+
+    @@media (max-width: 600px) {
+        .youth-name
+
+    {
+        font-size: 1.25rem;
+    }
+
+    .profile-image {
+        width: 100px;
+        height: 100px;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .timestamps {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    }
+</style>
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        YOUTH DETAILS
+    </TitleContent>
+
+    <DialogContent>
+        @if (_youth != null)
+        {
+            <div class="view-youth-content">
+                <!-- Profile Section -->
+                <div class="profile-section">
+                    <img src="@GetYouthImagePath()" alt="Youth Profile" class="profile-image" />
+                    <div class="youth-name">@_youth.FullName</div>
+                    <div>
+                        <span class="youth-age-badge">@_youth.Age years old</span>
+                        <span class="status-chip @(_youth.Status == "Active" ? "status-active" : "status-inactive")">
+                            @_youth.Status
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Personal Information -->
+                <div class="info-section">
+                    <div class="section-title">Personal Information</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Date of Birth</div>
+                            <div class="info-value">@_youth.DateOfBirth.ToString("MMMM dd, yyyy")</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Gender</div>
+                            <div class="info-value">@_youth.Gender</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Civil Status</div>
+                            <div class="info-value">@_youth.CivilStatus</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Information -->
+                <div class="info-section">
+                    <div class="section-title">Contact Information</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Email Address</div>
+                            <div class="info-value">@_youth.Email</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Contact Number</div>
+                            <div class="info-value">@_youth.ContactNumber</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Barangay</div>
+                            <div class="info-value">@_youth.Barangay</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Complete Address</div>
+                            <div class="info-value">@_youth.Address</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Educational & Work Information -->
+                <div class="info-section">
+                    <div class="section-title">Educational & Work Information</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Educational Attainment</div>
+                            <div class="info-value">@(string.IsNullOrEmpty(_youth.EducationalAttainment) ? "Not specified" : _youth.EducationalAttainment)</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Current School</div>
+                            <div class="info-value">@(string.IsNullOrEmpty(_youth.CurrentSchool) ? "Not specified" : _youth.CurrentSchool)</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Occupation</div>
+                            <div class="info-value">@(string.IsNullOrEmpty(_youth.Occupation) ? "Not specified" : _youth.Occupation)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Voter Status -->
+                <div class="info-section">
+                    <div class="section-title">Voter Information</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Registered Voter</div>
+                            <div class="info-value">
+                                <span class="@(_youth.IsVoter ? "badge-yes" : "badge-no")">
+                                    @(_youth.IsVoter ? "Yes" : "No")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">SK Voter</div>
+                            <div class="info-value">
+                                <span class="@(_youth.IsSKVoter ? "badge-yes" : "badge-no")">
+                                    @(_youth.IsSKVoter ? "Yes" : "No")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Willing to Volunteer</div>
+                            <div class="info-value">
+                                <span class="@(_youth.WillingToVolunteer ? "badge-yes" : "badge-no")">
+                                    @(_youth.WillingToVolunteer ? "Yes" : "No")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Skills & Interests -->
+                @if (!string.IsNullOrEmpty(_youth.Skills) || !string.IsNullOrEmpty(_youth.Interests))
+                {
+                    <div class="info-section">
+                        <div class="section-title">Skills & Interests</div>
+
+                        @if (!string.IsNullOrEmpty(_youth.Skills))
+                        {
+                            <div class="skills-interests-section">
+                                <div class="info-label">Skills</div>
+                                <div class="tag-container">
+                                    @foreach (var skill in _youth.Skills.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                    {
+                                        <span class="tag">@skill.Trim()</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(_youth.Interests))
+                        {
+                            <div class="skills-interests-section">
+                                <div class="info-label">Interests</div>
+                                <div class="tag-container">
+                                    @foreach (var interest in _youth.Interests.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                    {
+                                        <span class="tag">@interest.Trim()</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Timestamps -->
+                <div class="timestamps">
+                    <div class="timestamp-item">
+                        <div class="timestamp-label">Registered</div>
+                        <div class="timestamp-value">@_youth.DateRegistered.ToString("MMM dd, yyyy")</div>
+                        <div class="timestamp-value" style="font-size: 0.75rem; opacity: 0.7;">@_youth.DateRegistered.ToString("hh:mm tt")</div>
+                    </div>
+                    @if (_youth.DateModified.HasValue)
+                    {
+                        <div class="timestamp-item">
+                            <div class="timestamp-label">Last Modified</div>
+                            <div class="timestamp-value">@_youth.DateModified.Value.ToString("MMM dd, yyyy")</div>
+                            <div class="timestamp-value" style="font-size: 0.75rem; opacity: 0.7;">@_youth.DateModified.Value.ToString("hh:mm tt")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close" Color="Color.Primary">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public Youth YouthToView { get; set; } = default!;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private Youth? _youth;
+
+    protected override void OnInitialized()
+    {
+        _youth = YouthToView;
+    }
+
+    private string GetYouthImagePath()
+    {
+        if (_youth?.ImageData != null && !string.IsNullOrEmpty(_youth.ImageMimeType))
+        {
+            return $"data:{_youth.ImageMimeType};base64,{Convert.ToBase64String(_youth.ImageData)}";
+        }
+        return "/Uploads/UserImg.png";
+    }
+
+    private void Close() => MudDialog.Close();
+}

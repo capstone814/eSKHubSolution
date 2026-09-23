@@ -1,0 +1,80 @@
+﻿@namespace eSKHubMobile.Components.Shared
+@using System.IO
+
+@if (!string.IsNullOrEmpty(_imageSource))
+{
+    <img src="@_imageSource" alt="@Alt" class="@Class" style="@Style" />
+}
+else if (ShowPlaceholder)
+{
+    <div class="image-placeholder @Class" style="@Style">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c0 1.1-.9 2-2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" fill="currentColor" opacity="0.3" /></svg>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Path { get; set; }
+    [Parameter] public string? Alt { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public bool ShowPlaceholder { get; set; } = true;
+
+    private string? _imageSource;
+    private string? _lastPath;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Path != _lastPath)
+        {
+            _lastPath = Path;
+            await LoadImageAsync();
+        }
+    }
+
+    private async Task LoadImageAsync()
+    {
+        if (string.IsNullOrEmpty(Path) || !File.Exists(Path))
+        {
+            _imageSource = null;
+            return;
+        }
+
+        try
+        {
+            // Read file asynchronously and convert to data URI
+            // This only happens when the component is rendered, saving RAM for off-screen items
+            var bytes = await File.ReadAllBytesAsync(Path);
+            var base64 = Convert.ToBase64String(bytes);
+            var extension = System.IO.Path.GetExtension(Path).ToLower().TrimStart('.');
+            var mimeType = extension switch
+            {
+                "png" => "image/png",
+                "gif" => "image/gif",
+                "pdf" => "application/pdf",
+                _ => "image/jpeg"
+            };
+
+            _imageSource = $"data:{mimeType};base64,{base64}";
+        }
+        catch
+        {
+            _imageSource = null;
+        }
+    }
+}
+
+<style>
+    .image-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f1f2f6;
+        color: #b2bec3;
+        overflow: hidden;
+    }
+
+        .image-placeholder svg {
+            width: 40%;
+            height: 40%;
+        }
+</style>

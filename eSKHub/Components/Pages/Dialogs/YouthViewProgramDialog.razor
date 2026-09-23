@@ -1,0 +1,286 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        PROGRAM DETAILS
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <MudItem xs="12">
+                <MudText Typo="Typo.h5" Style="font-weight: 600; margin-bottom: 8px;">@Program.Title</MudText>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                    <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(Program.Category)">
+                        @Program.Category
+                    </MudChip>
+                    @if (_isRegistered)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                            You're Registered
+                        </MudChip>
+                    }
+                </div>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-3" Elevation="0" Style="background: rgba(126, 111, 255, 0.05); border-left: 3px solid #7e6fff;">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 4px;">Proposed By</MudText>
+                    <MudText Typo="Typo.body2">@Program.ProposedBy</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Program.ProposerPosition - @Program.ProposerArea</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Description</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.Description</MudText>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Objectives</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.Objectives</MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Target Beneficiaries</MudText>
+                <MudText Typo="Typo.body2">@Program.TargetBeneficiaries</MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Expected Outcomes</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.ExpectedOutcomes</MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Budget</MudText>
+                    <MudText Typo="Typo.h6" Color="Color.Primary">₱@Program.Budget.ToString("N2")</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Timeline</MudText>
+                    <MudText Typo="Typo.body2">@Program.Timeline</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @Program.StartDate.ToString("MMM dd, yyyy") - @Program.EndDate.ToString("MMM dd, yyyy")
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Venue</MudText>
+                <MudText Typo="Typo.body2">@Program.Venue</MudText>
+            </MudItem>
+
+            @if (!string.IsNullOrEmpty(Program.Partners))
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Partners/Collaborators</MudText>
+                    <MudText Typo="Typo.body2">@Program.Partners</MudText>
+                </MudItem>
+            }
+
+            @if (Program.AttachmentData != null && Program.AttachmentData.Length > 0)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Supporting Documents</MudText>
+                    @if (Program.AttachmentType == "image")
+                    {
+                        <img src="@GetAttachmentPath()" alt="Supporting document" style="max-width: 100%; border-radius: 8px;" />
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   OnClick="DownloadAttachment">
+                            Download Document
+                        </MudButton>
+                    }
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">Close</MudButton>
+        @if (!_isRegistered)
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       OnClick="RegisterForProgram"
+                       Disabled="@_isProcessing"
+                       StartIcon="@Icons.Material.Filled.HowToReg">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Registering...</span>
+                }
+                else
+                {
+                    <span>Register/Participate</span>
+                }
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Error"
+                       Variant="Variant.Outlined"
+                       OnClick="UnregisterFromProgram"
+                       Disabled="@_isProcessing"
+                       StartIcon="@Icons.Material.Filled.Cancel">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Processing...</span>
+                }
+                else
+                {
+                    <span>Unregister</span>
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public ProgramProject Program { get; set; } = default!;
+
+    [Parameter]
+    public int YouthId { get; set; }
+
+    private bool _isRegistered = false;
+    private bool _isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckRegistrationStatus();
+    }
+
+    private async Task CheckRegistrationStatus()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _isRegistered = await db.ProgramParticipations
+                .AnyAsync(p => p.ProgramId == Program.Id && p.YouthId == YouthId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error checking registration: {ex.Message}");
+        }
+    }
+
+    private async Task RegisterForProgram()
+    {
+        _isProcessing = true;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var youth = await db.Youths.FindAsync(YouthId);
+            if (youth == null)
+            {
+                Snackbar.Add("Youth profile not found", Severity.Error);
+                return;
+            }
+
+            var participation = new ProgramParticipation
+            {
+                ProgramId = Program.Id,
+                YouthId = YouthId,
+                YouthName = youth.FullName,
+                YouthEmail = youth.Email,
+                YouthContact = youth.ContactNumber,
+                YouthBarangay = youth.Barangay,
+                DateRegistered = DateTime.Now,
+                Status = "Registered"
+            };
+
+            db.ProgramParticipations.Add(participation);
+            await db.SaveChangesAsync();
+
+            _isRegistered = true;
+            Snackbar.Add($"Successfully registered for {Program.Title}!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error registering: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UnregisterFromProgram()
+    {
+        _isProcessing = true;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var participation = await db.ProgramParticipations
+                .FirstOrDefaultAsync(p => p.ProgramId == Program.Id && p.YouthId == YouthId);
+
+            if (participation != null)
+            {
+                db.ProgramParticipations.Remove(participation);
+                await db.SaveChangesAsync();
+
+                _isRegistered = false;
+                Snackbar.Add("Successfully unregistered from program", Severity.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error unregistering: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Youth Development" => Color.Primary,
+        "Environment" => Color.Success,
+        "Sports" => Color.Info,
+        "Employment" => Color.Warning,
+        "Health" => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetAttachmentPath()
+    {
+        if (Program.AttachmentData != null && !string.IsNullOrEmpty(Program.AttachmentMimeType))
+        {
+            return $"data:{Program.AttachmentMimeType};base64,{Convert.ToBase64String(Program.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (Program.AttachmentData != null && !string.IsNullOrEmpty(Program.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(Program.AttachmentData);
+            var fileName = Program.Attachment ?? "document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Program.AttachmentMimeType, base64);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

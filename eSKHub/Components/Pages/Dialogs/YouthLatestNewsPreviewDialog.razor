@@ -1,0 +1,104 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Pages.Dialogs
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        LATEST NEWS
+    </TitleContent>
+
+    <DialogContent>
+        @if (MostRecentNews != null)
+        {
+            <MudPaper Class="pa-4" Elevation="0" Style="background: linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%); border-radius: 12px;">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12">
+                        <div style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 12px;">
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.h4" Style="font-weight: 600; margin-bottom: 12px;">
+                                    @MostRecentNews.Title
+                                </MudText>
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetNewsTypeColor(MostRecentNews.NewsType)">
+                                        @MostRecentNews.NewsType
+                                    </MudChip>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Published on @MostRecentNews.DateCreated.ToString("MMMM dd, yyyy")
+                                    </MudText>
+                                </div>
+                            </div>
+                        </div>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body1" Style="white-space: pre-wrap; line-height: 1.8;">
+                            @MostRecentNews.Summary
+                        </MudText>
+                    </MudItem>
+
+                    @if (!string.IsNullOrWhiteSpace(MostRecentNews.Author))
+                    {
+                        <MudItem xs="12">
+                            <div style="display: flex; align-items: start; gap: 8px;">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Primary" Style="margin-top: 2px;" />
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.caption" Style="font-weight: 600; color: #666; line-height: 1.2;">Author</MudText>
+                                    <MudText Typo="Typo.body2" Style="line-height: 1.5;">@MostRecentNews.Author</MudText>
+                                </div>
+                            </div>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+        }
+        else
+        {
+            <div style="text-align: center; padding: 40px 20px;">
+                <MudIcon Icon="@Icons.Material.Filled.Newspaper" Size="Size.Large" Color="Color.Secondary" Style="margin-bottom: 16px;" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary">No News Available</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">There are currently no news articles to display.</MudText>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        @if (MostRecentNews != null)
+        {
+            <MudButton OnClick="ViewFullDetails" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ReadMore">
+                Read Full Article
+            </MudButton>
+        }
+        <MudButton OnClick="Close" Variant="Variant.Text" Color="Color.Default">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public NewsArticle? MostRecentNews { get; set; }
+
+    private Color GetNewsTypeColor(string newsType) => newsType switch
+    {
+        "Breaking" => Color.Error,
+        "Feature" => Color.Primary,
+        "Community" => Color.Success,
+        "Event" => Color.Info,
+        "Achievement" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private async Task ViewFullDetails()
+    {
+        if (MostRecentNews == null) return;
+
+        MudDialog.Close();
+
+        var parameters = new DialogParameters { { "NewsToView", MostRecentNews } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<YouthViewNewsDialog>("News Details", parameters, options);
+    }
+
+    private void Close() => MudDialog.Close();
+}

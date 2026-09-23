@@ -1,0 +1,248 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject UserStateService UserState
+@inject ISnackbar Snackbar
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        CREATE POLL/SURVEY
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form" Model="_newPoll">
+            <MudTextField T="string"
+                          Label="Question"
+                          @bind-Value="_question"
+                          Required="true"
+                          RequiredError="Question is required"
+                          Variant="Variant.Outlined"
+                          Lines="2"
+                          Class="mb-3" />
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Options</MudText>
+            @foreach (var option in _options)
+            {
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <MudTextField T="string"
+                                  @bind-Value="option.Value"
+                                  Variant="Variant.Outlined"
+                                  Dense="true"
+                                  Placeholder="Enter option"
+                                  Style="flex: 1;" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => RemoveOption(option))"
+                                   Disabled="@(_options.Count <= 2)" />
+                </div>
+            }
+
+            <MudButton Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Small"
+                       OnClick="AddOption"
+                       Class="mb-3">
+                Add Option
+            </MudButton>
+
+            @if (_isAdmin)
+            {
+                <MudSelect T="string"
+                           Label="Audience"
+                           @bind-Value="_audience"
+                           Required="true"
+                           Variant="Variant.Outlined"
+                           Class="mb-3">
+                    <MudSelectItem Value="@("Public")">Public</MudSelectItem>
+                    <MudSelectItem Value="@("Barangay")">Specific Barangay</MudSelectItem>
+                </MudSelect>
+                @if (_audience == "Barangay")
+                {
+                    <MudSelect T="string"
+                               Label="Target Barangay"
+                               @bind-Value="_targetBarangay"
+                               Required="true"
+                               Variant="Variant.Outlined"
+                               Class="mb-3">
+                        @foreach (var barangay in _barangays.Where(b => b.Area != _currentUserArea))
+                        {
+                            <MudSelectItem Value="@barangay.Area">@barangay.Area</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            }
+            else
+            {
+                <MudSelect T="string"
+                           Label="Audience"
+                           @bind-Value="_audience"
+                           Required="true"
+                           Variant="Variant.Outlined"
+                           Class="mb-3">
+                    <MudSelectItem Value="@("Public")">Public</MudSelectItem>
+                    <MudSelectItem Value="@("Barangay")">My Barangay Only</MudSelectItem>
+                </MudSelect>
+
+                @if (_audience == "Barangay")
+                {
+                    <MudTextField T="string"
+                                  Label="Target Barangay"
+                                  Value="@_currentUserArea"
+                                  Variant="Variant.Outlined"
+                                  ReadOnly="true"
+                                  Class="mb-3"
+                                  Style="background-color: rgba(0,0,0,0.05);" />
+                }
+            }
+
+            <MudDatePicker Label="Expiration Date (Optional)"
+                           @bind-Date="_expirationDate"
+                           Variant="Variant.Outlined"
+                           MinDate="DateTime.Today"
+                           Class="mb-3" />
+
+            <MudSwitch @bind-Value="_isActive"
+                       Color="Color.Success"
+                       Class="mb-3">
+                Activate Immediately
+            </MudSwitch>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Creating...</span>
+            }
+            else
+            {
+                <span>Create Poll</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private MudForm _form = default!;
+    private Poll _newPoll = new();
+    private string _question = string.Empty;
+    private List<OptionItem> _options = new() { new(), new() };
+    private string _audience = "Public";
+    private string? _targetBarangay;
+    private string _currentUserArea = string.Empty;
+    private string _currentUserRole = string.Empty;
+    private bool _isAdmin = false;
+    private DateTime? _expirationDate;
+    private bool _isActive = true;
+    private bool _isSaving = false;
+    private List<User> _barangays = new();
+
+    private class OptionItem
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.InitializeAsync();
+        _currentUserArea = UserState.Area ?? "";
+
+        // Get the current user from database to check their Role
+        using var db = await DbFactory.CreateDbContextAsync();
+        var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+        if (currentUser != null)
+        {
+            _currentUserRole = currentUser.Role;
+            _isAdmin = currentUser.Role == "Admin";
+
+            // Load barangays for Admin users
+            if (_isAdmin)
+            {
+                _barangays = await db.Users
+                    .Where(u => !string.IsNullOrEmpty(u.Area))
+                    .GroupBy(u => u.Area)
+                    .Select(g => g.First())
+                    .ToListAsync();
+            }
+        }
+    }
+
+    private void AddOption()
+    {
+        _options.Add(new OptionItem());
+    }
+
+    private void RemoveOption(OptionItem option)
+    {
+        if (_options.Count > 2)
+        {
+            _options.Remove(option);
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        if (string.IsNullOrWhiteSpace(_question))
+        {
+            Snackbar.Add("Question is required", Severity.Warning);
+            return;
+        }
+
+        var validOptions = _options.Where(o => !string.IsNullOrWhiteSpace(o.Value)).Select(o => o.Value).ToList();
+
+        if (validOptions.Count < 2)
+        {
+            Snackbar.Add("At least 2 options are required", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            var poll = new Poll
+            {
+                Question = _question,
+                Options = JsonSerializer.Serialize(validOptions),
+                CreatedBy = UserState.Fullname ?? "Unknown",
+                CreatorArea = UserState.Area ?? "",
+                Audience = _audience,
+                TargetBarangay = _audience == "Barangay"
+                    ? (_isAdmin ? _targetBarangay : _currentUserArea)
+                    : null,
+                DateExpires = _expirationDate,
+                IsActive = _isActive,
+                DateCreated = DateTime.Now
+            };
+
+            db.Polls.Add(poll);
+            await db.SaveChangesAsync();
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error creating poll: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

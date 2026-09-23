@@ -1,0 +1,93 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true">
+    <TitleContent>
+        EDIT AREA
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField T="string"
+                          Label="Area Name"
+                          @bind-Value="_editAreaName"
+                          Required="true"
+                          RequiredError="Area name is required"
+                          Variant="Variant.Outlined"
+                          Class="mb-3" />
+
+            <MudRadioGroup T="string" @bind-Value="_editAreaType" Required="true">
+                <MudRadio T="string" Value="@("Municipality")" Color="Color.Primary">Municipality</MudRadio>
+                <MudRadio T="string" Value="@("Barangay")" Color="Color.Secondary">Barangay</MudRadio>
+            </MudRadioGroup>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+    private string _editAreaName = string.Empty;
+    private string _editAreaType = string.Empty;
+
+    [Parameter] public Area AreaToEdit { get; set; } = default!;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        _editAreaName = AreaToEdit.Name;
+        _editAreaType = AreaToEdit.Type;
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+
+        _isSaving = true;
+
+        try
+        {
+            var areaInDb = await Db.Areas.FindAsync(AreaToEdit.Id);
+            if (areaInDb != null)
+            {
+                areaInDb.Name = _editAreaName.Trim();
+                areaInDb.Type = _editAreaType;
+
+                await Db.SaveChangesAsync();
+                Snackbar.Add("Area updated successfully!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating area: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,846 @@
+﻿@page "/announcements"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ThemeService ThemeService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Announcements - eSKHub</PageTitle>
+
+<style>
+    .announcements-layout {
+        display: flex;
+        gap: 0;
+        min-height: auto;
+        margin-left: -16px;
+        margin-bottom: 16px;
+    }
+
+    .announcements-drawer {
+        width: 350px;
+        border-right: 1px solid var(--mud-palette-divider);
+        background: var(--mud-palette-surface);
+        margin-left: 0;
+        padding-left: 0;
+        height: calc(100vh - 65px);
+        position: fixed; /* Change from sticky to fixed */
+        top: 65px;
+        left: 0; /* Add left position */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 10; /* Add z-index to keep it above content */
+    }
+
+    .drawer-header-light {
+        padding: 16px;
+        border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-header-dark {
+        padding: 16px;
+        border-bottom: 2px solid var(--mud-palette-primary);
+        color: #ffffff;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    }
+
+    .drawer-filters {
+        padding: 16px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+    .drawer-list {
+        padding: 8px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .announcement-item {
+        padding: 12px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+
+        .announcement-item:hover {
+            background: var(--mud-palette-action-default-hover);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+        .announcement-item.selected {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border-left-color: var(--mud-palette-primary);
+        }
+
+    .announcement-item-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .announcement-item-desc {
+        font-size: 0.75rem;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 6px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .announcement-item-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .announcement-content {
+        flex: 1;
+        padding: 32px;
+        overflow-y: auto;
+        margin-left: 350px; /* Match the drawer width */
+    }
+
+    .content-header {
+        margin-bottom: 24px;
+    }
+
+    .content-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        line-height: 1.2;
+    }
+
+    .content-meta {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+        padding: 16px 0;
+        border-bottom: 2px solid var(--mud-palette-secondary);
+        margin-bottom: 24px;
+    }
+
+        .content-meta .mud-chip {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+
+            .content-meta .mud-chip:first-child {
+                margin-left: 0;
+            }
+
+    .content-body {
+        font-size: 1.1rem;
+        line-height: 1.8;
+        white-space: pre-wrap;
+        margin-bottom: 32px;
+    }
+
+    .content-body-with-image {
+        overflow: hidden; /* clears the float */
+    }
+
+        .content-body-with-image img {
+            float: left;
+            width: 250px; /* smaller image size */
+            max-width: 40%; /* responsive limit */
+            height: auto;
+            margin-right: 16px; /* space between image and text */
+            margin-bottom: 16px; /* space below image */
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+
+    .content-attachment {
+        margin-top: 32px;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 300px;
+        text-align: center;
+        padding: 32px;
+    }
+
+    .empty-drawer-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 24px;
+        text-align: center;
+    }
+
+    .filter-toggle-button {
+        display: none;
+    }
+
+    .filter-section-desktop {
+        display: flex !important;
+    }
+
+    .filter-section-mobile {
+        display: none !important;
+    }
+
+    @@media (max-width: 600px) {
+        .content-meta {
+            gap: 8px;
+        }
+
+            .content-meta .mud-chip {
+                font-size: 0.7rem;
+                padding: 4px 8px;
+                height: auto;
+                min-height: 28px;
+            }
+
+                .content-meta .mud-chip .mud-chip-content {
+                    white-space: normal;
+                    line-height: 1.2;
+                    word-break: break-word;
+                }
+
+                .content-meta .mud-chip .mud-icon-root {
+                    font-size: 0.9rem;
+                }
+
+        .content-body {
+            font-size: 1rem;
+        }
+
+        .content-body-with-image img {
+            float: none;
+            width: 100%;
+            max-width: 100%;
+            margin-right: 0;
+            margin-bottom: 16px;
+        }
+        .announcements-layout {
+            flex-direction: column;
+            margin-left: 0;
+        }
+
+        .announcements-drawer {
+            width: 100%;
+            position: relative; /* Change from fixed to relative on mobile */
+            border-right: none;
+            top: 10px;
+            border-bottom: 1px solid var(--mud-palette-divider);
+            max-height: 480px;
+            border-radius: 8px;
+        }
+
+            .announcements-drawer .header-content {
+                font-size: 1.5rem;
+                margin: 0px !important;
+            }
+
+            .announcements-drawer .mud-typography-caption {
+                font-size: 0.75rem;
+                margin: 0px !important;
+            }
+
+            .announcements-drawer.filters-collapsed {
+                max-height: 280px;
+            }
+
+        .filter-section-desktop {
+            display: none !important;
+        }
+
+        .filter-section-mobile {
+            display: flex !important;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            white-space: nowrap !important;
+            font-size: 0.8rem !important;
+            padding: 4px 8px !important;
+            min-height: 28px !important;
+            margin-bottom: 8px;
+        }
+
+        .filters-hidden {
+            display: none !important;
+        }
+
+        .filters-visible {
+            display: flex !important;
+        }
+        .drawer-filters {
+            padding: 8px;
+        }
+
+            .drawer-filters .mud-input-control {
+                font-size: 0.75rem;
+            }
+
+            .drawer-filters .mud-input-label {
+                font-size: 0.75rem !important;
+            }
+
+            .drawer-filters .mud-select-input {
+                font-size: 0.75rem;
+            }
+
+            .drawer-filters .filter-section-wrapper {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .drawer-filters .mud-select,
+            .drawer-filters .mud-input-control {
+                width: 100% !important;
+            }
+
+        .announcement-content {
+            margin-left: 0; /* Reset margin on mobile */
+            max-height: none;
+            padding: 12px; /* Add 16px padding on mobile */
+            margin-top: 20px;
+        }
+
+        .content-title {
+            font-size: 1.75rem;
+        }
+
+        .content-body {
+            font-size: 1rem;
+        }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-0">
+    <div class="announcements-layout">
+        <!-- Drawer -->
+        <div class="announcements-drawer @(!_showFilters ? "filters-collapsed" : "")">
+            <div class="@(ThemeService.IsDarkMode ? "drawer-header-dark" : "drawer-header-light")">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2 header-content">
+                    <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Style="font-weight: 700;">ANNOUNCEMENTS</MudText>
+                </MudStack>
+                <MudText Typo="Typo.caption" Style="color: #ffffff;">
+                    @_filteredAnnouncements.Count of @_allAnnouncements.Count Updates
+                </MudText>
+            </div>
+
+            <div class="drawer-filters">
+                <!-- Mobile Filter Toggle Button -->
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+                           FullWidth="true"
+                           OnClick="@(() => _showFilters = !_showFilters)"
+                           Class="filter-toggle-button">
+                    @(_showFilters ? "Hide Filters" : "Show Filters")
+                </MudButton>
+
+                <!-- Desktop Filters (Always Visible) -->
+                <MudStack Spacing="1" Class="filter-section-desktop">
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Author"
+                               @bind-Value="_authorFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Authors</MudSelectItem>
+                        @foreach (var author in _authors)
+                        {
+                            <MudSelectItem Value="@author">@author</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Area Type"
+                               @bind-Value="_areaTypeFilter"
+                               @bind-Value:after="OnAreaTypeFilterChanged"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Types</MudSelectItem>
+                        <MudSelectItem Value="@("Municipality")">Municipality</MudSelectItem>
+                        <MudSelectItem Value="@("Barangay")">Barangay</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Specific Area"
+                               @bind-Value="_specificAreaFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Disabled="@(_areaTypeFilter == "all")">
+                        <MudSelectItem Value="@("all")">All Areas</MudSelectItem>
+                        @foreach (var area in _availableAreas)
+                        {
+                            <MudSelectItem Value="@area">@area</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_authorFilter != "all" || _areaTypeFilter != "all" || _sortFilter != "newest")
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+
+                <!-- Mobile Filters (Collapsible) -->
+                <MudStack Spacing="1" Class="@($"filter-section-mobile {(_showFilters ? "filters-visible" : "filters-hidden")}")">
+                    <MudSelect T="string"
+                               Label="Sort By"
+                               @bind-Value="_sortFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("newest")">Newest First</MudSelectItem>
+                        <MudSelectItem Value="@("oldest")">Oldest First</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Author"
+                               @bind-Value="_authorFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Authors</MudSelectItem>
+                        @foreach (var author in _authors)
+                        {
+                            <MudSelectItem Value="@author">@author</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Area Type"
+                               @bind-Value="_areaTypeFilter"
+                               @bind-Value:after="OnAreaTypeFilterChanged"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("all")">All Types</MudSelectItem>
+                        <MudSelectItem Value="@("Municipality")">Municipality</MudSelectItem>
+                        <MudSelectItem Value="@("Barangay")">Barangay</MudSelectItem>
+                    </MudSelect>
+
+                    <MudSelect T="string"
+                               Label="Specific Area"
+                               @bind-Value="_specificAreaFilter"
+                               @bind-Value:after="ApplyFilters"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense"
+                               Disabled="@(_areaTypeFilter == "all")">
+                        <MudSelectItem Value="@("all")">All Areas</MudSelectItem>
+                        @foreach (var area in _availableAreas)
+                        {
+                            <MudSelectItem Value="@area">@area</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    @if (_authorFilter != "all" || _areaTypeFilter != "all" || _sortFilter != "newest")
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudStack>
+            </div>
+
+            <div class="drawer-list">
+                @if (_filteredAnnouncements.Any())
+                {
+                    @foreach (var announcement in _filteredAnnouncements)
+                    {
+                        <div class="announcement-item @(_selectedAnnouncement?.Id == announcement.Id ? "selected" : "")"
+                             @onclick="() => SelectAnnouncement(announcement)">
+                            <div class="announcement-item-title">@announcement.Subject</div>
+                            <div class="announcement-item-desc">@announcement.ShortDescription</div>
+                            <div class="announcement-item-meta">
+                                <span>
+                                    @announcement.Author <br>
+                                    (@announcement.AuthorPosition - @announcement.AuthorArea)
+                                </span>
+                                <span>@announcement.DateCreated.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="empty-drawer-state">
+                        <MudIcon Icon="@Icons.Material.Filled.SearchOff"
+                                 Size="Size.Large"
+                                 Color="Color.Secondary"
+                                 Style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Style="margin-bottom: 8px; font-weight: 600;">
+                            No Announcements Found
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Style="opacity: 0.7;">
+                            @if (_isLoading)
+                            {
+                                <text>Loading announcements...</text>
+                            }
+                            else if (HasActiveFilters())
+                            {
+                                <text>Try adjusting your filters to see more results</text>
+                            }
+                            else
+                            {
+                                <text>There are no published announcements at this time</text>
+                            }
+                        </MudText>
+                        @if (HasActiveFilters())
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Clear"
+                                       OnClick="ClearFilters"
+                                       Style="margin-top: 16px;">
+                                Clear Filters
+                            </MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="announcement-content">
+            @if (_selectedAnnouncement != null)
+            {
+                <div class="content-header">
+                    <div class="content-title">@_selectedAnnouncement.Subject</div>
+                    <div style="font-size: 1.1rem; color: var(--mud-palette-text-secondary); font-style: italic; margin-bottom: 16px;">
+                        @_selectedAnnouncement.ShortDescription
+                    </div>
+                    <div class="content-meta">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Icon="@Icons.Material.Filled.Person" Class="child-content-meta">
+                            @_selectedAnnouncement.Author (@_selectedAnnouncement.AuthorPosition - @_selectedAnnouncement.AuthorArea)
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.CalendarToday" Class="child-content-meta">
+                            @_selectedAnnouncement.DateCreated.ToString("MMMM dd, yyyy • hh:mm tt")
+                        </MudChip>
+                        @if (_selectedAnnouncement.DateModified.HasValue)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Icon="@Icons.Material.Filled.Edit" Class="child-content-meta">
+                                Updated: @_selectedAnnouncement.DateModified.Value.ToString("MMM dd, yyyy • hh:mm tt")
+                            </MudChip>
+                        }
+                        @if (_selectedAnnouncement.Audience == "Barangay")
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.LocationOn" Class="child-content-meta">
+                                @_selectedAnnouncement.TargetBarangay
+                            </MudChip>
+                        }
+                    </div>
+                </div>
+
+                <div class="content-body-with-image">
+                    @if (_selectedAnnouncement.AttachmentData != null &&
+                                    _selectedAnnouncement.AttachmentData.Length > 0 &&
+                                    _selectedAnnouncement.AttachmentType == "image")
+                    {
+                        <img src="@GetAttachmentPath(_selectedAnnouncement)" alt="Announcement attachment" />
+                    }
+
+                    <div class="content-body">
+                        @_selectedAnnouncement.Body
+                    </div>
+
+                    @* Optional: handle non-image attachment buttons below text *@
+                    @if (_selectedAnnouncement.AttachmentData != null &&
+                                    _selectedAnnouncement.AttachmentData.Length > 0 &&
+                                    _selectedAnnouncement.AttachmentType != "image")
+                    {
+                        <div class="content-attachment">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       OnClick="@(async () => await DownloadAttachment(_selectedAnnouncement))">
+                                Download Attachment
+                            </MudButton>
+                        </div>
+                    }
+                </div>
+
+            }
+            else if (!_isLoading)
+            {
+                <div class="empty-state">
+                    <MudIcon Icon="@Icons.Material.Filled.Article"
+                             Size="Size.Large"
+                             Color="Color.Secondary"
+                             Style="font-size: 80px; margin-bottom: 16px;" />
+                    <MudText Typo="Typo.h5" Color="Color.Secondary" Style="margin-bottom: 8px;">
+                        Select an announcement
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Choose an announcement from the list to view its full content
+                    </MudText>
+                </div>
+            }
+
+            @if (_isLoading)
+            {
+                <div class="empty-state">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Style="margin-top: 16px;">
+                        Loading announcements...
+                    </MudText>
+                </div>
+            }
+        </div>
+    </div>
+</MudContainer>
+
+@code {
+    private bool _showFilters = false;
+
+    private List<Announcement> _allAnnouncements = new();
+    private List<Announcement> _filteredAnnouncements = new();
+    private Announcement? _selectedAnnouncement;
+    private bool _isLoading = true;
+
+    private List<string> _authors = new();
+    private List<string> _areas = new();
+    private List<Area> _allAreas = new();
+    private List<string> _availableAreas = new();
+
+    private string _sortFilter = "newest";
+    private string _authorFilter = "all";
+    private string _areaTypeFilter = "all";
+    private string _specificAreaFilter = "all";
+
+    [SupplyParameterFromQuery(Name = "autoselect")]
+    public bool AutoSelect { get; set; } = false;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        ThemeService.OnThemeChanged += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+
+    private bool HasActiveFilters()
+    {
+        return _sortFilter != "newest" ||
+        _authorFilter != "all" ||
+        _areaTypeFilter != "all" ||
+        _specificAreaFilter != "all";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnnouncements();
+    }
+
+    private async Task LoadAnnouncements()
+    {
+        _isLoading = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _allAnnouncements = await db.Announcements
+                .Where(a => a.IsPublished && a.Audience == "Public")
+                .OrderByDescending(a => a.DateCreated)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Load all areas for filtering
+            _allAreas = await db.Areas
+                .OrderBy(a => a.Type)
+                .ThenBy(a => a.Name)
+                .AsNoTracking()
+                .ToListAsync();
+
+            // Get unique authors
+            _authors = _allAnnouncements
+                .Select(a => a.Author ?? "Unknown")
+                .Distinct()
+                .OrderBy(a => a)
+                .ToList();
+
+            // Get unique areas from AuthorArea
+            _areas = _allAnnouncements
+                .Where(a => !string.IsNullOrEmpty(a.AuthorArea))
+                .Select(a => a.AuthorArea!)
+                .Distinct()
+                .OrderBy(a => a)
+                .ToList();
+
+            ApplyFilters();
+
+            // Only auto-select if AutoSelect parameter is true
+            if (AutoSelect && _filteredAnnouncements.Any())
+            {
+                _selectedAnnouncement = _filteredAnnouncements.First();
+            }
+            else
+            {
+                _selectedAnnouncement = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading announcements: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredAnnouncements = _allAnnouncements;
+
+        // Apply author filter
+        if (_authorFilter != "all")
+        {
+            _filteredAnnouncements = _filteredAnnouncements
+                .Where(a => a.Author == _authorFilter)
+                .ToList();
+        }
+
+        // Apply area type filter
+        if (_areaTypeFilter != "all")
+        {
+            var areasOfType = _allAreas
+                .Where(a => a.Type == _areaTypeFilter)
+                .Select(a => a.Name)
+                .ToList();
+
+            _filteredAnnouncements = _filteredAnnouncements
+                .Where(u => !string.IsNullOrEmpty(u.AuthorArea) && areasOfType.Contains(u.AuthorArea))
+                .ToList();
+        }
+
+        // Apply specific area filter
+        if (_specificAreaFilter != "all")
+        {
+            _filteredAnnouncements = _filteredAnnouncements
+                .Where(a => a.AuthorArea == _specificAreaFilter)
+                .ToList();
+        }
+
+        // Apply sort filter
+        _filteredAnnouncements = _sortFilter == "newest"
+            ? _filteredAnnouncements.OrderByDescending(a => a.DateCreated).ToList()
+            : _filteredAnnouncements.OrderBy(a => a.DateCreated).ToList();
+
+        StateHasChanged();
+    }
+
+    private void OnAreaTypeFilterChanged()
+    {
+        // Reset specific area filter when area type changes
+        _specificAreaFilter = "all";
+
+        // Update available areas based on selected type
+        if (_areaTypeFilter == "all")
+        {
+            _availableAreas = new List<string>();
+        }
+        else
+        {
+            _availableAreas = _allAreas
+                .Where(a => a.Type == _areaTypeFilter)
+                .Select(a => a.Name)
+                .OrderBy(n => n)
+                .ToList();
+        }
+
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        _sortFilter = "newest";
+        _authorFilter = "all";
+        _areaTypeFilter = "all";
+        _specificAreaFilter = "all";
+        _availableAreas = new List<string>();
+        ApplyFilters();
+    }
+
+    private void SelectAnnouncement(Announcement announcement)
+    {
+        _selectedAnnouncement = announcement;
+    }
+
+    private string GetAttachmentPath(Announcement announcement)
+    {
+        if (announcement.AttachmentData != null && !string.IsNullOrEmpty(announcement.AttachmentMimeType))
+        {
+            return $"data:{announcement.AttachmentMimeType};base64,{Convert.ToBase64String(announcement.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment(Announcement announcement)
+    {
+        if (announcement.AttachmentData != null && !string.IsNullOrEmpty(announcement.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(announcement.AttachmentData);
+            var fileName = announcement.Attachment ?? "document";
+
+            // Trigger browser download using JavaScript
+            await JS.InvokeVoidAsync("downloadFile", fileName, announcement.AttachmentMimeType, base64);
+        }
+    }
+}

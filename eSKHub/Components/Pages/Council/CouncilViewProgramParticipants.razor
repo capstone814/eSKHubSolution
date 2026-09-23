@@ -1,0 +1,251 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@using ClosedXML.Excel
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        PROGRAM PARTICIPANTS
+    </TitleContent>
+
+    <DialogContent>
+        <MudStack Spacing="3">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <MudText Typo="Typo.h6" Style="font-weight: 600;">@Program.Title</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Total Participants: @_participants.Count
+                    </MudText>
+                </div>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="GenerateMasterList"
+                           Disabled="@(!_participants.Any())">
+                    Generate Master List
+                </MudButton>
+            </div>
+
+            <MudDivider />
+
+            @if (_isLoading)
+            {
+                <div style="text-align: center; padding: 40px;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </div>
+            }
+            else if (!_participants.Any())
+            {
+                <MudAlert Severity="Severity.Info">
+                    No participants have registered for this program yet.
+                </MudAlert>
+            }
+            else
+            {
+                <MudTable Items="_participants" Hover="true" Bordered="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>No.</MudTh>
+                        <MudTh>Youth Name</MudTh>
+                        <MudTh>Barangay</MudTh>
+                        <MudTh>Contact</MudTh>
+                        <MudTh>Email</MudTh>
+                        <MudTh>Date Registered</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="No.">@(_participants.IndexOf(context) + 1)</MudTd>
+                        <MudTd DataLabel="Youth Name">@context.YouthName</MudTd>
+                        <MudTd DataLabel="Barangay">@context.YouthBarangay</MudTd>
+                        <MudTd DataLabel="Contact">@context.YouthContact</MudTd>
+                        <MudTd DataLabel="Email">@context.YouthEmail</MudTd>
+                        <MudTd DataLabel="Date Registered">@context.DateRegistered.ToString("MMM dd, yyyy")</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                                @context.Status
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Actions">
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small">
+                                <MudMenuItem OnClick="@(() => MarkAsAttended(context))">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                                        <span>Mark as Attended</span>
+                                    </div>
+                                </MudMenuItem>
+                                <MudMenuItem OnClick="@(() => RemoveParticipant(context))">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" />
+                                        <span style="color: var(--mud-palette-error);">Remove</span>
+                                    </div>
+                                </MudMenuItem>
+                            </MudMenu>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Variant="Variant.Text">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter]
+    public ProgramProject Program { get; set; } = default!;
+
+    private List<ProgramParticipation> _participants = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadParticipants();
+    }
+
+    private async Task LoadParticipants()
+    {
+        _isLoading = true;
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _participants = await db.ProgramParticipations
+                .Where(p => p.ProgramId == Program.Id)
+                .OrderByDescending(p => p.DateRegistered)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading participants: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAsAttended(ProgramParticipation participant)
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var participantInDb = await db.ProgramParticipations.FindAsync(participant.Id);
+
+            if (participantInDb != null)
+            {
+                participantInDb.Status = "Attended";
+                await db.SaveChangesAsync();
+                await LoadParticipants();
+                Snackbar.Add($"{participant.YouthName} marked as attended", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error updating status: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RemoveParticipant(ProgramParticipation participant)
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var participantInDb = await db.ProgramParticipations.FindAsync(participant.Id);
+
+            if (participantInDb != null)
+            {
+                db.ProgramParticipations.Remove(participantInDb);
+                await db.SaveChangesAsync();
+                await LoadParticipants();
+                Snackbar.Add($"{participant.YouthName} removed from participants", Severity.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error removing participant: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task GenerateMasterList()
+    {
+        try
+        {
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Participants");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "No.";
+            worksheet.Cell(1, 2).Value = "Youth Name";
+            worksheet.Cell(1, 3).Value = "Barangay";
+            worksheet.Cell(1, 4).Value = "Contact Number";
+            worksheet.Cell(1, 5).Value = "Email";
+            worksheet.Cell(1, 6).Value = "Date Registered";
+            worksheet.Cell(1, 7).Value = "Status";
+
+            // Style headers
+            var headerRange = worksheet.Range(1, 1, 1, 7);
+            headerRange.Style.Font.Bold = true;
+            headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+            headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+            // Add data
+            for (int i = 0; i < _participants.Count; i++)
+            {
+                var participant = _participants[i];
+                var row = i + 2;
+
+                worksheet.Cell(row, 1).Value = i + 1;
+                worksheet.Cell(row, 2).Value = participant.YouthName;
+                worksheet.Cell(row, 3).Value = participant.YouthBarangay;
+                worksheet.Cell(row, 4).Value = participant.YouthContact ?? "";
+                worksheet.Cell(row, 5).Value = participant.YouthEmail;
+                worksheet.Cell(row, 6).Value = participant.DateRegistered.ToString("MMM dd, yyyy");
+                worksheet.Cell(row, 7).Value = participant.Status;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+
+            // Add program info at the top
+            worksheet.Row(1).InsertRowsAbove(3);
+            worksheet.Cell(1, 1).Value = "Program/Project Master List";
+            worksheet.Cell(1, 1).Style.Font.FontSize = 16;
+            worksheet.Cell(1, 1).Style.Font.Bold = true;
+
+            worksheet.Cell(2, 1).Value = $"Program: {Program.Title}";
+            worksheet.Cell(3, 1).Value = $"Generated on: {DateTime.Now:MMMM dd, yyyy hh:mm tt}";
+
+            // Save to memory stream
+            using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            var content = stream.ToArray();
+            var base64 = Convert.ToBase64String(content);
+
+            var fileName = $"Participants_{Program.Title.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.xlsx";
+
+            await JS.InvokeVoidAsync("downloadFile", fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", base64);
+
+            Snackbar.Add("Master list generated successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generating master list: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Registered" => Color.Info,
+        "Attended" => Color.Success,
+        "Cancelled" => Color.Error,
+        _ => Color.Default
+    };
+
+    private void Close() => MudDialog.Close();
+}

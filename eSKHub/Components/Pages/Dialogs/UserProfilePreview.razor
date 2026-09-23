@@ -1,0 +1,120 @@
+﻿@using MudBlazor
+@inject IDialogService DialogService
+
+<style>
+    .profile-preview-dialog {
+        width: 50%;
+        max-width: 500px;
+        min-width: 320px;
+        background: transparent;
+        box-shadow: none;
+        text-align: center;
+        margin: auto;
+    }
+
+    .profile-preview-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        text-align: center;
+        padding-top: 30px;
+        padding-bottom: 30px;
+    }
+
+    .profile-preview-image {
+        width: 400px;
+        height: 400px;
+        border-radius: 50%;
+        object-fit: cover;
+        box-shadow: 0 0 30px rgba(255,255,255,0.2);
+    }
+
+    /* Tablet screens */
+    @@media (max-width: 768px) {
+        .profile-preview-dialog {
+            width: 70%;
+            max-width: 400px;
+            min-width: 280px;
+        }
+
+        .profile-preview-content {
+            padding-top: 20px;
+            padding-bottom: 20px;
+        }
+
+        .profile-preview-image {
+            width: 350px !important;
+            height: 350px !important;
+        }
+    }
+
+    /* Phone screens */
+    @@media (max-width: 480px) {
+        .profile-preview-dialog {
+            width: 85%;
+            max-width: 320px;
+            min-width: 240px;
+        }
+
+        .profile-preview-content {
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+
+        .profile-preview-image {
+            width: 300px !important;
+            height: 300px !important;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2) !important;
+        }
+
+        .profile-preview-username {
+            font-size: 0.875rem !important;
+        }
+    }
+
+    /* Small phone screens */
+    @@media (max-width: 360px) {
+        .profile-preview-dialog {
+            width: 90%;
+            max-width: 280px;
+            min-width: 200px;
+        }
+
+        .profile-preview-content {
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        .profile-preview-image {
+            width: 250px !important;
+            height: 250px !important;
+            box-shadow: 0 0 15px rgba(255,255,255,0.2) !important;
+        }
+
+        .profile-preview-username {
+            font-size: 0.75rem !important;
+            margin-top: 8px !important;
+        }
+    }
+</style>
+
+<MudDialog Class="profile-preview-dialog">
+    <DialogContent>
+        <div class="profile-preview-content">
+            <img src="@ImagePath"
+                 alt="User Image"
+                 class="profile-preview-image" />
+            <MudText Typo="Typo.subtitle1" Class="mt-2 profile-preview-username">@Username</MudText>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [Parameter] public string? ImagePath { get; set; }
+    [Parameter] public string? Username { get; set; }
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+    private void CloseDialog() => MudDialog.Close();
+}

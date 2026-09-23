@@ -1,0 +1,572 @@
+﻿@page "/council/polls"
+@layout eSKHub.Components.Layout.CouncilLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using eSKHub.Components.Dialogs
+@using eSKHub.Components.Pages.Dialogs
+@using System.Text.Json
+@inject IDialogService DialogService
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject NavigationManager NavigationManager
+
+<PageTitle>Manage Polls - Council</PageTitle>
+
+<style>
+    .poll-card {
+        margin-bottom: 16px;
+        border-left: 4px solid #7e6fff;
+        transition: transform 0.2s ease;
+    }
+
+        .poll-card:hover {
+            transform: translateX(4px);
+        }
+
+    .add-poll-btn {
+        margin-bottom: 16px;
+        margin-top: 16px;
+    }
+
+    .filter-section {
+        margin-bottom: 16px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .mobile-cards {
+        display: none;
+    }
+
+    @@media (max-width: 600px) {
+        .desktop-cards {
+            display: none;
+        }
+
+        .mobile-cards {
+            display: block;
+        }
+
+        .poll-mobile-card {
+            margin-bottom: 12px;
+            border-left: 4px solid #7e6fff;
+        }
+
+        .poll-mobile-header {
+            background-color: #7e6fff;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top-right-radius: 4px;
+        }
+
+        .poll-mobile-content {
+            padding: 16px;
+        }
+
+        .poll-mobile-actions {
+            border-top: 1px solid rgba(0, 0, 0, 0.12);
+            display: flex;
+            gap: 8px;
+            justify-content: space-between;
+            padding: 10px 16px;
+        }
+
+        .poll-field-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--mud-palette-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .poll-field-value {
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .add-poll-btn {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+    }
+</style>
+
+<MudButton Class="add-poll-btn"
+           Variant="Variant.Filled"
+           StartIcon="@Icons.Material.Filled.Add"
+           Color="Color.Info"
+           Size="Size.Small"
+           OnClick="OpenAddPollDialog">
+    POLL/SURVEY
+</MudButton>
+
+<!-- Filter Section -->
+<MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+    <MudButton Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+               FullWidth="true"
+               OnClick="@(() => _showFilters = !_showFilters)"
+               Class="filter-toggle-button">
+        @(_showFilters ? "Hide Filters" : "Show Filters")
+    </MudButton>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="8">
+            <MudTextField T="string"
+                          @bind-Value="_searchTerm"
+                          @bind-Value:after="ApplyFilters"
+                          Label="Search Polls"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Placeholder="Search question..."
+                          Immediate="true"
+                          DebounceInterval="300"
+                          Dense="true"
+                          Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_statusFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Status"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Status</MudSelectItem>
+                <MudSelectItem Value="@("Active")">Active</MudSelectItem>
+                <MudSelectItem Value="@("Inactive")">Inactive</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="2">
+            <MudSelect T="string"
+                       @bind-Value="_audienceFilter"
+                       @bind-Value:after="ApplyFilters"
+                       Label="Audience"
+                       Variant="Variant.Outlined"
+                       Dense="true"
+                       Margin="Margin.Dense">
+                <MudSelectItem Value="@("All")">All Audience</MudSelectItem>
+                <MudSelectItem Value="@("Public")">Public</MudSelectItem>
+                <MudSelectItem Value="@("Barangay")">Own Barangay</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid>
+        <MudItem xs="12">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Showing @_pagedPolls.Count of @_filteredPolls.Count polls
+                </MudText>
+                @if (HasActiveFilters())
+                {
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Clear"
+                               OnClick="ClearFilters">
+                        Clear Filters
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Elevation="0" Class="pa-4">
+    @if (_pagedPolls == null || !_pagedPolls.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            @if (HasActiveFilters())
+            {
+                <text>No polls found matching your filters.</text>
+            }
+            else
+            {
+                <text>No polls created yet. Create your first poll!</text>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Desktop View -->
+        <div class="desktop-cards">
+            @foreach (var poll in _pagedPolls)
+            {
+                <MudCard Class="poll-card" Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600;">@poll.Question</MudText>
+                                    <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+                                        <MudChip T="string" Size="Size.Small" Color="@(poll.IsActive? Color.Success: Color.Default)">
+                                            @(poll.IsActive ? "Active" : "Inactive")
+                                        </MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                            @(poll.Audience == "Barangay" ? $"Barangay: {poll.TargetBarangay}" : "Public")
+                                        </MudChip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                                            @GetTotalVotes(poll) votes
+                                        </MudChip>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <MudIconButton Icon="@Icons.Material.Filled.BarChart"
+                                                   Color="Color.Info"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ViewResults(poll))"
+                                                   Title="View Results" />
+                                    <MudIconButton Icon="@(poll.IsActive? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                                   Color="Color.Warning"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => ToggleActive(poll))"
+                                                   Title="@(poll.IsActive ? "Deactivate" : "Activate")" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => DeletePoll(poll))"
+                                                   Title="Delete" />
+                                </div>
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.body2" Style="font-weight: 600; margin-bottom: 8px;">Options:</MudText>
+                        @foreach (var option in GetOptions(poll))
+                        {
+                            <MudChip T="string" Size="Size.Small" Style="margin-right: 8px; margin-bottom: 8px;">
+                                @option
+                            </MudChip>
+                        }
+
+                        @if (poll.DateExpires.HasValue)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 12px;">
+                                Expires: @poll.DateExpires.Value.ToString("MMM dd, yyyy")
+                            </MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </div>
+
+        <!-- Mobile View -->
+        <div class="mobile-cards">
+            @for (int i = 0; i < _pagedPolls.Count; i++)
+            {
+                var poll = _pagedPolls[i];
+                var index = (_currentPage - 1) * _pageSize + i + 1;
+
+                <MudCard Class="poll-mobile-card" Elevation="2">
+                    <div class="poll-mobile-header">
+                        <span><strong>Poll #@index</strong></span>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(poll.IsActive ? Color.Success : Color.Default)"
+                                 Style="background: rgba(255,255,255,0.3); color: white;">
+                            @(poll.IsActive ? "Active" : "Inactive")
+                        </MudChip>
+                    </div>
+                    <div class="poll-mobile-content">
+                        <MudText Typo="Typo.body2" Class="poll-field-label">
+                            <strong>Question:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="poll-field-value">
+                            @poll.Question
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="poll-field-label">
+                            <strong>Audience:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="poll-field-value">
+                            @(poll.Audience == "Barangay" ? $"Barangay: {poll.TargetBarangay}" : "Public")
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="poll-field-label">
+                            <strong>Total Votes:</strong>
+                        </MudText>
+                        <MudText Typo="Typo.body1" Class="poll-field-value">
+                            @GetTotalVotes(poll)
+                        </MudText>
+
+                        <MudText Typo="Typo.body2" Class="poll-field-label">
+                            <strong>Options:</strong>
+                        </MudText>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+                            @foreach (var option in GetOptions(poll))
+                            {
+                                <MudChip T="string" Size="Size.Small">@option</MudChip>
+                            }
+                        </div>
+                    </div>
+                    <div class="poll-mobile-actions">
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.BarChart"
+                                       Color="Color.Info"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ViewResults(poll))" />
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@(poll.IsActive ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                       Color="Color.Warning"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ToggleActive(poll))" />
+                        <MudIconButton Variant="Variant.Filled"
+                                       Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@(() => DeletePoll(poll))" />
+                    </div>
+                </MudCard>
+            }
+        </div>
+
+        <!-- Pagination -->
+        <div style="display: flex; justify-content: center; margin-top: 24px;">
+            <MudPagination Count="@_totalPages"
+                           Selected="@_currentPage"
+                           SelectedChanged="OnPageChanged"
+                           Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           ShowFirstButton="true"
+                           ShowLastButton="true" />
+        </div>
+    }
+</MudPaper>
+
+@code {
+    private bool _showFilters = false;
+    private List<Poll> _polls = new();
+    private List<Poll> _filteredPolls = new();
+    private List<Poll> _pagedPolls = new();
+    private bool _initialized = false;
+    private string _currentUserArea = string.Empty;
+
+    // Filter variables
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = "All";
+    private string _audienceFilter = "All";
+
+    // Pagination variables
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private int _totalPages = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+
+            await UserState.InitializeAsync();
+
+            if (!UserState.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+            if (currentUser == null || currentUser.Role == "Admin")
+            {
+                NavigationManager.NavigateTo("/", forceLoad: true);
+                return;
+            }
+
+            _currentUserArea = currentUser.Area;
+            await LoadPolls();
+        }
+    }
+
+    private async Task LoadPolls()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        _polls = await db.Polls
+            .Where(p => p.CreatorArea == _currentUserArea)
+            .OrderByDescending(p => p.DateCreated)
+            .AsNoTracking()
+            .ToListAsync();
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredPolls = _polls;
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredPolls = _filteredPolls.Where(p =>
+                p.Question.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        // Apply status filter
+        if (_statusFilter != "All")
+        {
+            bool isActive = _statusFilter == "Active";
+            _filteredPolls = _filteredPolls.Where(p => p.IsActive == isActive).ToList();
+        }
+
+        // Apply audience filter
+        if (_audienceFilter != "All")
+        {
+            _filteredPolls = _filteredPolls.Where(p => p.Audience == _audienceFilter).ToList();
+        }
+
+        // Reset to first page when filters change
+        _currentPage = 1;
+        UpdatePagination();
+    }
+
+    private void UpdatePagination()
+    {
+        _totalPages = (int)Math.Ceiling(_filteredPolls.Count / (double)_pageSize);
+        if (_totalPages == 0) _totalPages = 1;
+
+        var skip = (_currentPage - 1) * _pageSize;
+        _pagedPolls = _filteredPolls
+            .Skip(skip)
+            .Take(_pageSize)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    private void OnPageChanged(int page)
+    {
+        _currentPage = page;
+        UpdatePagination();
+    }
+
+    private void ClearFilters()
+    {
+        _searchTerm = string.Empty;
+        _statusFilter = "All";
+        _audienceFilter = "All";
+        ApplyFilters();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(_searchTerm) ||
+               _statusFilter != "All" ||
+               _audienceFilter != "All";
+    }
+
+    private List<string> GetOptions(Poll poll)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(poll.Options) ?? new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private int GetTotalVotes(Poll poll)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(poll.Votes))
+                return 0;
+
+            var votes = JsonSerializer.Deserialize<Dictionary<string, int>>(poll.Votes);
+            return votes?.Values.Sum() ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private async Task OpenAddPollDialog()
+    {
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AddPollDialog>("Create Poll/Survey", options);
+        var result = await dialog.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            await LoadPolls();
+            Snackbar.Add("Poll created successfully!", Severity.Success);
+        }
+    }
+
+    private async Task ViewResults(Poll poll)
+    {
+        var parameters = new DialogParameters { { "Poll", poll } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<PollResultsDialog>("Poll Results", parameters, options);
+    }
+
+    private async Task ToggleActive(Poll poll)
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        var pollInDb = await db.Polls.FindAsync(poll.Id);
+
+        if (pollInDb != null)
+        {
+            pollInDb.IsActive = !pollInDb.IsActive;
+            await db.SaveChangesAsync();
+            await LoadPolls();
+
+            Snackbar.Add(pollInDb.IsActive ? "Poll activated!" : "Poll deactivated!", Severity.Info);
+        }
+    }
+
+    private async Task DeletePoll(Poll poll)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete this poll? This action cannot be undone." },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+        var dialogRef = await DialogService.ShowAsync<ConfirmDialog>("Confirm Delete", parameters, options);
+        var result = await dialogRef.Result;
+
+        if (!(result?.Canceled ?? true))
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var pollToDelete = await db.Polls.FindAsync(poll.Id);
+
+            if (pollToDelete != null)
+            {
+                db.Polls.Remove(pollToDelete);
+                await db.SaveChangesAsync();
+            }
+
+            await LoadPolls();
+            Snackbar.Add("Poll deleted successfully!", Severity.Success);
+        }
+    }
+}

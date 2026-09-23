@@ -1,0 +1,506 @@
+@page "/events"
+@using eSKHubMobile.Services
+@using eSKHubMobile.Models
+@inject AuthService AuthService
+@inject OfflineDbService OfflineDb
+@inject NavigationManager Navigation
+
+<div class="page-container">
+    <header class="page-header">
+        <button class="back-btn" @onclick='() => Navigation.NavigateTo("/home")'>
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <h1>Upcoming Events</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <div class="content-area">
+        @if (_isLoading)
+        {
+            <div class="shimmer-list">
+                @for (int i = 0; i < 5; i++)
+                {
+                    <div class="shimmer-card"></div>
+                }
+            </div>
+        }
+        else if (!_events.Any())
+        {
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <p>No upcoming events</p>
+            </div>
+        }
+        else
+        {
+            <div class="events-list">
+                @foreach (var ev in _events)
+                {
+                    <div class="event-card" @onclick="() => ShowDetails(ev)">
+                        <div class="event-accent"></div>
+                        <div class="event-card-content">
+                            <div class="event-date-box">
+                                <span class="day">@ev.EventDate.Day</span>
+                                <span class="month">@ev.EventDate.ToString("MMM")</span>
+                            </div>
+                            <div class="event-details">
+                                <h3>@ev.Title</h3>
+                                <div class="event-meta">
+                                    <span class="location">
+                                        <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                        @ev.Location
+                                    </span>
+                                    @if (ev.StartTime.HasValue)
+                                    {
+                                        <span class="time">
+                                            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 6v6l4 2" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                            @DateTime.Today.Add(ev.StartTime.Value).ToString("hh:mm tt")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (_selectedEvent != null)
+    {
+        <div class="modal-overlay" @onclick="CloseDetails">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <button class="close-modal" @onclick="CloseDetails">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+                <div class="modal-body">
+                    <div class="modal-event-header">
+                        <div class="event-date-splash">
+                            <span class="day">@_selectedEvent.EventDate.Day</span>
+                            <span class="month">@_selectedEvent.EventDate.ToString("MMMM yyyy")</span>
+                        </div>
+                    </div>
+                    <div class="modal-info">
+                        <span class="event-tag">@(_selectedEvent.EventType ?? "Official Event")</span>
+                        <h2>@_selectedEvent.Title</h2>
+
+                        <div class="event-info-strip">
+                            <div class="info-pill">
+                                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                <span>@_selectedEvent.Location</span>
+                            </div>
+                            @if (_selectedEvent.StartTime.HasValue)
+                            {
+                                <div class="info-pill">
+                                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 6v6l4 2" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                                    <span>
+                                        @DateTime.Today.Add(_selectedEvent.StartTime.Value).ToString("hh:mm tt")
+                                        @if (_selectedEvent.EndTime.HasValue)
+                                        {
+                                            @($" - {DateTime.Today.Add(_selectedEvent.EndTime.Value).ToString("hh:mm tt")}")
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="organizer-banner">
+                            <span class="label">Organized By</span>
+                            <span class="value">@(_selectedEvent.Organizer ?? "Community Council")</span>
+                        </div>
+
+                        <div class="section-title">About this event</div>
+                        <div class="article-content">
+                            @((MarkupString)(_selectedEvent.Description?.Replace("\n", "<br/>") ?? "No additional details available for this event."))
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .page-container {
+        background-color: #f8f9fe;
+        min-height: 100vh;
+        color: #2d3436;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .page-header {
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        padding: 10px 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #2d3436;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+        .page-header h1 {
+            font-size: 18px;
+            font-weight: 800;
+            margin: 0;
+        }
+
+    .header-spacer {
+        width: 40px;
+    }
+
+    .back-btn {
+        background: rgba(0, 0, 0, 0.05);
+        border: none;
+        color: #2d3436;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .back-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+    .content-area {
+        padding: 20px;
+    }
+
+    .events-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .event-card {
+        background: white;
+        border-radius: 20px;
+        display: flex;
+        align-items: stretch;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+        .event-card:active {
+            transform: scale(0.98);
+        }
+
+    .event-accent {
+        width: 6px;
+        background: #ff6b6b;
+        flex-shrink: 0;
+    }
+
+    .event-card-content {
+        flex: 1;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        padding: 15px;
+    }
+
+    .event-date-box {
+        background: #fff0f0;
+        color: #ff6b6b;
+        width: 50px;
+        height: 55px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+        .event-date-box .day {
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .event-date-box .month {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+    .event-details {
+        flex: 1;
+    }
+
+        .event-details h3 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 6px;
+            color: #2d3436;
+        }
+
+    .event-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+        .event-meta span {
+            font-size: 10px;
+            color: #636e72;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .event-meta svg {
+            width: 12px;
+            height: 12px;
+            color: #b2bec3;
+        }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #b2bec3;
+    }
+
+    .empty-state svg {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 16px;
+        opacity: 0.3;
+    }
+
+    .shimmer-card {
+        height: 80px;
+        background: linear-gradient(110deg, #ececec 8%, #f5f5f5 18%, #ececec 33%);
+        border-radius: 20px;
+        background-size: 200% 100%;
+        animation: shimmer 1.5s linear infinite;
+        margin-bottom: 12px;
+    }
+
+    @@keyframes shimmer {
+        to {
+            background-position-x: -200%;
+        }
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        background: white;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        border-radius: 30px 30px 0 0;
+        position: relative;
+        overflow: hidden;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(100%);
+        }
+
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .close-modal {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: white;
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 10;
+        color: #2d3436;
+    }
+
+        .close-modal svg {
+            width: 20px;
+            height: 20px;
+        }
+
+    .modal-body {
+        overflow-y: auto;
+        max-height: 90vh;
+    }
+
+    .modal-event-header {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ff8e8e 100%);
+        height: 120px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+
+    .event-date-splash {
+        text-align: center;
+    }
+
+        .event-date-splash .day {
+            font-size: 40px;
+            font-weight: 900;
+            line-height: 1;
+            display: block;
+        }
+
+        .event-date-splash .month {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+    .modal-info {
+        padding: 24px;
+    }
+
+    .event-tag {
+        font-size: 9px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #ff6b6b;
+        background: #fff0f0;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+        margin-bottom: 12px;
+    }
+
+    .modal-info h2 {
+        font-size: 22px;
+        font-weight: 800;
+        margin: 0 0 16px;
+        color: #2d3436;
+        line-height: 1.3;
+    }
+
+    .event-info-strip {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 24px;
+    }
+
+    .info-pill {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #636e72;
+    }
+
+        .info-pill svg {
+            width: 18px;
+            height: 18px;
+            color: #ff6b6b;
+        }
+
+    .organizer-banner {
+        background: #f8f9fe;
+        padding: 12px 16px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-bottom: 24px;
+    }
+
+        .organizer-banner .label {
+            font-size: 9px;
+            font-weight: 700;
+            color: #b2bec3;
+            text-transform: uppercase;
+        }
+
+        .organizer-banner .value {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+    .section-title {
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #2d3436;
+        margin-bottom: 10px;
+    }
+
+    .article-content {
+        font-size: 14px;
+        line-height: 1.8;
+        color: #2d3436;
+    }
+</style>
+
+@code {
+    private List<OfflineEvent> _events = new();
+    private bool _isLoading = true;
+    private OfflineEvent? _selectedEvent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _events = await OfflineDb.GetItemsAsync<OfflineEvent>();
+            _events = _events.Where(e => e.EventDate.Date >= DateTime.Today && 
+                                        (string.IsNullOrEmpty(e.Audience) || 
+                                         e.Audience.Equals("Public", StringComparison.OrdinalIgnoreCase) || 
+                                         (e.Audience.Equals("Barangay", StringComparison.OrdinalIgnoreCase) && e.TargetBarangay == AuthService.Area)))
+                             .OrderBy(e => e.EventDate)
+                             .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading events: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDetails(OfflineEvent ev)
+    {
+        _selectedEvent = ev;
+        StateHasChanged();
+    }
+
+    private void CloseDetails()
+    {
+        _selectedEvent = null;
+        StateHasChanged();
+    }
+}

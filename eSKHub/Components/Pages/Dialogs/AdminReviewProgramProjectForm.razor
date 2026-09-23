@@ -1,0 +1,158 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@inject ISnackbar Snackbar
+@inject AppDbContext Db
+@inject UserStateService UserState
+
+<MudDialog MaxWidth="MaxWidth.Medium" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        REVIEW PROGRAM/PROJECT PROPOSAL
+    </TitleContent>
+
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="2">
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info">
+                        <strong>Proposal by:</strong> @ProgramToReview.ProposedBy (@ProgramToReview.ProposerPosition - @ProgramToReview.ProposerArea)
+                    </MudAlert>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600;">@ProgramToReview.Title</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@ProgramToReview.Category</MudText>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudSelect T="string"
+                               Label="Review Decision"
+                               @bind-Value="_decision"
+                               Required="true"
+                               RequiredError="Decision is required"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem Value="@("Approved")">Approve</MudSelectItem>
+                        <MudSelectItem Value="@("Disapproved")">Disapprove</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+
+                @if (_decision == "Disapproved")
+                {
+                    <MudItem xs="12">
+                        <MudTextField T="string"
+                                      Label="Feedback (Required for Disapproval)"
+                                      @bind-Value="_feedback"
+                                      Required="true"
+                                      RequiredError="Feedback is required when disapproving"
+                                      Lines="4"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Provide clear feedback on why this proposal is disapproved" />
+                    </MudItem>
+                }
+                else if (_decision == "Approved")
+                {
+                    <MudItem xs="12">
+                        <MudTextField T="string"
+                                      Label="Feedback (Optional)"
+                                      @bind-Value="_feedback"
+                                      Lines="3"
+                                      Variant="Variant.Outlined"
+                                      HelperText="Optional comments or suggestions for the proposer" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@_isSaving">
+            @if (_isSaving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Submitting...</span>
+            }
+            else
+            {
+                <span>Submit Review</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form = default!;
+    private bool _isSaving = false;
+
+    [Parameter] public ProgramProject ProgramToReview { get; set; } = default!;
+
+    private string _decision = "Pending";
+    private string _feedback = string.Empty;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    protected override void OnParametersSet()
+    {
+        base.OnParametersSet();
+
+        // Set initial decision based on the program's current status
+        if (!string.IsNullOrWhiteSpace(ProgramToReview?.Status))
+        {
+            _decision = ProgramToReview.Status;
+            _feedback = ProgramToReview.AdminFeedback ?? string.Empty;
+        }
+        else
+        {
+            _decision = "Pending";
+        }
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_form.IsValid)
+            return;
+
+        if (_decision == "Disapproved" && string.IsNullOrWhiteSpace(_feedback))
+        {
+            Snackbar.Add("Feedback is required when disapproving a proposal", Severity.Warning);
+            return;
+        }
+
+        _isSaving = true;
+
+        try
+        {
+            using var db = await Db.Database.BeginTransactionAsync();
+            var programInDb = await Db.ProgramsProjects.FindAsync(ProgramToReview.Id);
+
+            if (programInDb != null)
+            {
+                await UserState.InitializeAsync();
+
+                programInDb.Status = _decision;
+                programInDb.AdminFeedback = _feedback;
+                programInDb.ReviewedBy = UserState.Fullname;
+                programInDb.ReviewedDate = DateTime.Now;
+                programInDb.DateModified = DateTime.Now;
+
+                await Db.SaveChangesAsync();
+                await db.CommitAsync();
+
+                Snackbar.Add($"Proposal {_decision.ToLower()} successfully!", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error submitting review: {ex.Message}", Severity.Error);
+            _isSaving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

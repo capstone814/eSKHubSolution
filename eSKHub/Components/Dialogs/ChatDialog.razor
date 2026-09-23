@@ -1,0 +1,385 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Components.Services
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@inject ChatService ChatService
+@inject UserStateService UserState
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@implements IDisposable
+
+<MudDialog MaxWidth="MaxWidth.Small" FullWidth="true" Class="chat-dialog-compact">
+    <DialogContent>
+        <div class="chat-container">
+            @if (_selectedUser == null)
+            {
+                <div class="user-list-view">
+                    <MudText Typo="Typo.h6" Class="mb-4">Messages</MudText>
+                    @if (_users == null)
+                    {
+                        <div class="d-flex justify-center pa-4">
+                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                        </div>
+                    }
+                    else if (!_users.Any())
+                    {
+                        <MudText Typo="Typo.body2" Align="Align.Center" Class="pa-4">No other users found.</MudText>
+                    }
+                    else
+                    {
+                        <MudList T="User" Clickable="true">
+                            @foreach (var user in _users)
+                            {
+                                int unreadCount = _unreadCounts?.GetValueOrDefault(user.Username) ?? 0;
+                                <MudListItem Value="@user" OnClick="@(() => SelectUser(user))">
+                                    <div class="d-flex align-center w-100">
+                                        <div class="d-flex align-center flex-grow-1">
+                                            <MudBadge Content="@(unreadCount > 0 ? unreadCount : null)"
+                                                      Color="Color.Error"
+                                                      Overlap="true"
+                                                      Visible="@(unreadCount > 0)"
+                                                      Class="mr-3">
+                                                <MudAvatar>
+                                                    @if (user.ImageData != null)
+                                                    {
+                                                        <MudImage Src="@($"data:{user.ImageMimeType};base64,{Convert.ToBase64String(user.ImageData)}")" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.Person" />
+                                                    }
+                                                </MudAvatar>
+                                            </MudBadge>
+                                            <div class="d-flex flex-column flex-grow-1 overflow-hidden">
+                                                <MudText Typo="Typo.body1" Class="@(unreadCount > 0 ? "fw-bold" : "")">@user.Fullname</MudText>
+                                                <div class="d-flex align-center">
+                                                    <MudText Typo="Typo.caption" Style="opacity: 0.6" Class="mr-2">
+                                                        @(user.Role == "Council" ? $"{user.Position} - {user.Area}" : user.Role)
+                                                    </MudText>
+                                                    @if (_lastMessages.TryGetValue(user.Username, out var lastMsg))
+                                                    {
+                                                        <MudText Typo="Typo.caption" Class="text-truncate" Style="opacity: 0.5; font-style: italic;">
+                                                            • @TruncateLastMessage(lastMsg)
+                                                        </MudText>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                        @if (UserState.Role == "Admin")
+                                        {
+                                            <MudTooltip Text="Clear Conversation">
+                                                <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep"
+                                                               Color="Color.Error"
+                                                               Size="Size.Small"
+                                                               OnClick="@((e) => ConfirmClear(user, e))" />
+                                            </MudTooltip>
+                                        }
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="conversation-view">
+                    <div class="chat-header d-flex align-center mb-2 pa-2">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="BackToList" Size="Size.Small" />
+                        <MudAvatar Size="Size.Small" Class="mx-2">
+                            @if (_selectedUser.ImageData != null)
+                            {
+                                <MudImage Src="@($"data:{_selectedUser.ImageMimeType};base64,{Convert.ToBase64String(_selectedUser.ImageData)}")" />
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Person" />
+                            }
+                        </MudAvatar>
+                        <MudText Typo="Typo.subtitle1">@_selectedUser.Fullname</MudText>
+                    </div>
+
+                    <div id="chat-messages" class="chat-messages-scroll" @ref="_scrollContainer">
+                        @if (!_messages.Any())
+                        {
+                            <div class="d-flex flex-column align-center justify-center mud-height-full opacity-50 pa-8 text-center">
+                                <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Large" Class="mb-2" />
+                                <MudText Typo="Typo.body2">No messages yet.</MudText>
+                                <MudText Typo="Typo.caption">Start the conversation with @_selectedUser.Fullname!</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var msg in _messages)
+                            {
+                                bool isMe = msg.SenderUsername == UserState.Username;
+                                <div class="@(isMe ? "message-me" : "message-them")">
+                                    <div class="message-bubble">
+                                        <MudText Typo="Typo.body2">@msg.Message</MudText>
+                                        <div class="d-flex align-center justify-end">
+                                            <MudText Typo="Typo.caption" Class="message-time">@msg.Timestamp.ToString("hh:mm tt")</MudText>
+                                            @if (isMe && msg.IsRead)
+                                            {
+                                                <MudTooltip Text="@($"Seen at {msg.ReadAt?.ToString("hh:mm tt")}")">
+                                                    <MudIcon Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small" Style="color: #40c4ff;" Class="ml-1" />
+                                                </MudTooltip>
+                                            }
+                                            else if (isMe)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Done" Size="Size.Small" Class="ml-1" Style="color: rgba(255,255,255,0.5);" />
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="chat-input pa-2">
+                        <div class="d-flex align-center">
+                            <MudTextField @bind-Value="_newMessage"
+                                          Placeholder="Type a message..."
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          OnKeyDown="HandleKeyDown"
+                                          Immediate="true"
+                                          AutoFocus="true" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Send"
+                                           Color="Color.Primary"
+                                           OnClick="SendMessage"
+                                           Disabled="@(string.IsNullOrWhiteSpace(_newMessage))" />
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+<style>
+    /* Target the MudDialog content to prevent double scrollbars */
+    .chat-dialog-compact .mud-dialog-content {
+        overflow: hidden !important;
+        padding: 0 !important;
+    }
+
+    .chat-container {
+        height: 500px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    @@media (max-width: 600px) {
+        .chat-container {
+            height: 80vh;
+        }
+    }
+
+    .user-list-view {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+    }
+
+    .conversation-view {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .chat-messages-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background-color: var(--mud-palette-background-grey);
+    }
+
+    .message-me, .message-them {
+        display: flex;
+        width: 100%;
+    }
+
+    .message-me {
+        justify-content: flex-end;
+    }
+
+    .message-them {
+        justify-content: flex-start;
+    }
+
+    .message-bubble {
+        max-width: 80%;
+        padding: 8px 12px;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .message-me .message-bubble {
+        background-color: var(--mud-palette-primary);
+        color: var(--mud-palette-primary-text);
+        border-bottom-right-radius: 2px;
+    }
+
+    .message-them .message-bubble {
+        background-color: var(--mud-palette-surface);
+        color: var(--mud-palette-text-primary);
+        border-bottom-left-radius: 2px;
+    }
+
+    .message-time {
+        font-size: 0.6rem;
+        opacity: 0.7;
+    }
+
+    .chat-header {
+        border-bottom: 1px solid var(--mud-palette-divider);
+        background-color: var(--mud-palette-surface);
+    }
+
+    .chat-input {
+        border-top: 1px solid var(--mud-palette-divider);
+        background-color: var(--mud-palette-surface);
+    }
+
+    .fw-bold {
+        font-weight: 700;
+    }
+</style>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private List<User>? _users;
+    private User? _selectedUser;
+    private List<ChatMessage> _messages = new();
+    private Dictionary<string, int> _unreadCounts = new();
+    private Dictionary<string, string> _lastMessages = new();
+    private string _newMessage = "";
+    private ElementReference _scrollContainer;
+    private System.Timers.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _users = await ChatService.GetChatableUsersAsync(UserState.Username!);
+        await RefreshUnreadCounts();
+
+        _timer = new System.Timers.Timer(3000);
+        _timer.Elapsed += async (s, e) => await InvokeAsync(PeriodicRefresh);
+        _timer.Start();
+    }
+
+    private async Task PeriodicRefresh()
+    {
+        await RefreshUnreadCounts();
+        if (_selectedUser != null)
+        {
+            await RefreshMessages();
+        }
+    }
+
+    private async Task RefreshUnreadCounts()
+    {
+        if (UserState.Username == null) return;
+        _unreadCounts = await ChatService.GetUnreadCountsPerUserAsync(UserState.Username);
+        _lastMessages = await ChatService.GetLastMessagesAsync(UserState.Username);
+        StateHasChanged();
+    }
+
+    private string TruncateLastMessage(string? msg)
+    {
+        if (string.IsNullOrEmpty(msg)) return "";
+        return msg.Length > 25 ? msg.Substring(0, 22) + "..." : msg;
+    }
+
+    private async Task SelectUser(User user)
+    {
+        _selectedUser = user;
+        _messages.Clear();
+        if (UserState.Username != null)
+        {
+            await ChatService.MarkAsReadAsync(user.Username, UserState.Username);
+            await RefreshUnreadCounts();
+        }
+        await RefreshMessages();
+    }
+
+    private void BackToList()
+    {
+        _selectedUser = null;
+        _messages.Clear();
+        _ = RefreshUnreadCounts();
+    }
+
+    private async Task RefreshMessages()
+    {
+        if (_selectedUser == null || UserState.Username == null) return;
+
+        var newMessages = await ChatService.GetConversationAsync(UserState.Username, _selectedUser.Username);
+
+        if (newMessages.Count != _messages.Count || newMessages.Any(m => m.IsRead != _messages.FirstOrDefault(om => om.Id == m.Id)?.IsRead))
+        {
+            _messages = newMessages;
+
+            // Mark incoming messages as read if dialog is open to this user
+            var hasUnreadFromThem = _messages.Any(m => m.SenderUsername == _selectedUser.Username && m.ReceiverUsername == UserState.Username && !m.IsRead);
+            if (hasUnreadFromThem)
+            {
+                await ChatService.MarkAsReadAsync(_selectedUser.Username, UserState.Username);
+                await RefreshUnreadCounts();
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_newMessage) || _selectedUser == null || UserState.Username == null) return;
+
+        var messageToSend = _newMessage;
+        _newMessage = "";
+
+        await ChatService.SendMessageAsync(UserState.Username, _selectedUser.Username, messageToSend);
+        await RefreshMessages();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ConfirmClear(User targetUser, MouseEventArgs e)
+    {
+        // Confirm before clearing
+        bool? result = await DialogService.ShowMessageBox(
+            "Clear Conversation",
+            $"Are you sure you want to clear all messages with {targetUser.Fullname}? This cannot be undone.",
+            yesText: "Clear", cancelText: "Cancel");
+
+        if (result == true && UserState.Username != null)
+        {
+            await ChatService.ClearConversationAsync(UserState.Username, targetUser.Username);
+            Snackbar.Add($"Conversation with {targetUser.Fullname} cleared.", Severity.Success);
+            await RefreshUnreadCounts();
+            if (_selectedUser?.Username == targetUser.Username)
+            {
+                _messages.Clear();
+                StateHasChanged();
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Stop();
+        _timer?.Dispose();
+    }
+}

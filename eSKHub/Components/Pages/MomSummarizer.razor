@@ -1,0 +1,410 @@
+﻿@page "/mom-summarizer"
+@using eSKHub.Services
+@using Markdig
+@inject IMomSummarizerService SummarizerService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>MoM Summarizer - eSKHub Admin</PageTitle>
+
+<style>
+    .header-section {
+        margin-bottom: 40px;
+    }
+
+    .header-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #667eea;
+    }
+
+    .header-description {
+        font-size: 1rem;
+        opacity: 0.7;
+        max-width: 700px;
+    }
+
+    .mom-card {
+        border-left: 4px solid #7e6fff;
+        transition: all 0.3s ease;
+    }
+
+        .mom-card:hover {
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+        }
+
+    @@media (max-width: 600px) {
+        .header-section {
+            margin-bottom: 24px;
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+        }
+
+        .header-description {
+            font-size: 0.9rem;
+        }
+
+        .mom-card {
+            border-left-width: 3px;
+        }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mb-16">
+    <div class="header-section">
+        <h1 class="header-title">AI Minutes of Meeting (MoM) Summarizer</h1>
+        <p class="header-description">
+            Upload a long Minutes of Meeting document and let AI summarize it for you, extracting key details and action items.
+            Supported formats: <strong>.pdf, .docx, .txt</strong>
+        </p>
+    </div>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 mom-card" Elevation="3">
+                <MudText Typo="Typo.h6" Class="mb-4" Style="font-weight: 600;">Upload Document</MudText>
+
+                <MudFileUpload T="IBrowserFile" Accept=".pdf, .docx, .txt" FilesChanged="UploadFiles" MaximumFileCount="1">
+                    <ActivatorContent>
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.CloudUpload"
+                                   Style="width: 100%;">
+                            Upload MoM File
+                        </MudButton>
+                    </ActivatorContent>
+                </MudFileUpload>
+
+                @if (_file != null)
+                {
+                    <MudList T="string" Class="mt-4">
+                        <MudListItem Icon="@Icons.Material.Filled.InsertDriveFile">
+                            @_file.Name
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">@(_file.Size / 1024) KB</MudText>
+                        </MudListItem>
+                    </MudList>
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Insights"
+                               Style="width: 100%; margin-top: 16px;"
+                               OnClick="GenerateSummary"
+                               Disabled="@_isProcessing">
+                        @if (_isProcessing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Summarizing...</span>
+                        }
+                        else
+                        {
+                            <span>Generate Summary</span>
+                        }
+                    </MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudPaper Class="pa-6 d-flex flex-column mom-card" Elevation="3" Style="min-height: 400px; max-height: 70vh; position: relative;">
+                <MudText Typo="Typo.h6" Class="mb-4 d-flex align-center" Style="font-weight: 600;">
+                    Generated Summary
+                    <MudSpacer />
+                    @if (!string.IsNullOrEmpty(_summaryText))
+                    {
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Outlined"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.ContentCopy"
+                                       OnClick="CopyToClipboard">
+                                Copy
+                            </MudButton>
+
+                            <MudMenu Label="Export" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download">
+                                <MudMenuItem OnClick="@(() => ExportSummary("txt"))">As .TXT</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => ExportSummary("docx"))">As .DOCX</MudMenuItem>
+                                <MudMenuItem OnClick="@(() => ExportSummary("pdf"))">As .PDF</MudMenuItem>
+                            </MudMenu>
+                        </div>
+                    }
+                </MudText>
+
+                <MudDivider Class="mb-4" />
+
+                <div class="flex-grow-1" style="overflow-y: auto;">
+                    @if (_isProcessing)
+                    {
+                        <div class="d-flex flex-column align-center justify-center h-100 mt-10">
+                            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+                            <MudText Typo="Typo.body1" Color="Color.Secondary">Analyzing document and extracting key points...</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">This might take up to a minute depending on document size.</MudText>
+                        </div>
+                    }
+                    else if (string.IsNullOrEmpty(_summaryText))
+                    {
+                        <div class="d-flex flex-column align-center justify-center h-100 mt-16" style="text-align: center; color: #6c757d;">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Style="font-size: 64px; opacity: 0.3;" Class="mb-4" />
+                            <MudText Typo="Typo.body1">No summary generated yet.</MudText>
+                            <MudText Typo="Typo.body2">Upload a document and click "Generate Summary".</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="markdown-body">
+                            @((MarkupString)Markdig.Markdown.ToHtml(_summaryText))
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private IBrowserFile? _file;
+    private bool _isProcessing;
+    private string _summaryText = string.Empty;
+
+    private void UploadFiles(IBrowserFile file)
+    {
+        if (file == null)
+        {
+            Snackbar.Add("No file selected.", Severity.Warning);
+            return;
+        }
+
+        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+        var allowedExtensions = new[] { ".pdf", ".docx", ".txt" };
+        if (!allowedExtensions.Contains(ext))
+        {
+            Snackbar.Add($"Invalid file format ({ext}). Please upload a .pdf, .docx, or .txt file.", Severity.Error, config =>
+            {
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 7000;
+            });
+            return;
+        }
+
+        const long maxFileSize = 10 * 1024 * 1024; // 10MB limit
+        if (file.Size > maxFileSize)
+        {
+            Snackbar.Add($"File is too large ({file.Size / (1024 * 1024)}MB). Maximum allowed size is 10MB.", Severity.Error, config =>
+            {
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 7000;
+            });
+            return;
+        }
+
+        _file = file;
+        _summaryText = string.Empty; // clear previous results
+        Snackbar.Add($"File '{file.Name}' uploaded and ready for summarization.", Severity.Info);
+    }
+
+    private async Task GenerateSummary()
+    {
+        if (_file == null)
+        {
+            Snackbar.Add("Please upload a file first before generating a summary.", Severity.Warning);
+            return;
+        }
+
+        _isProcessing = true;
+        _summaryText = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            _summaryText = await SummarizerService.SummarizeMomAsync(_file);
+            Snackbar.Add("Summary generated successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            string errorMessage = "An unexpected error occurred while generating the summary.";
+            string details = ex.Message.ToLowerInvariant();
+
+            if (details.Contains("503") || details.Contains("serviceunavailable") || details.Contains("high demand"))
+            {
+                errorMessage = "The AI service is currently experiencing high demand. Please try again in a few minutes.";
+            }
+            else if (details.Contains("429") || details.Contains("quota") || details.Contains("too many requests"))
+            {
+                errorMessage = "The AI service quota has been exceeded or too many requests were sent. Please wait a moment and try again.";
+            }
+            else if (details.Contains("400") || details.Contains("badrequest"))
+            {
+                errorMessage = "The document could not be processed by the AI. It might be too large, corrupted, or unreadable.";
+            }
+            else if (details.Contains("network") || details.Contains("timeout"))
+            {
+                errorMessage = "A network error or timeout occurred while connecting to the AI service. Please try again.";
+            }
+
+            Snackbar.Add(errorMessage, Severity.Error, config =>
+            {
+                config.RequireInteraction = true;
+                config.ShowCloseIcon = true;
+                config.VisibleStateDuration = 10000;
+            });
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyToClipboard()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_summaryText))
+            {
+                Snackbar.Add("No summary available to copy.", Severity.Warning);
+                return;
+            }
+
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _summaryText);
+            Snackbar.Add("Summary copied to clipboard successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Unable to auto-copy to clipboard. Your browser might be blocking this action. Details: {ex.Message}", Severity.Error, config =>
+            {
+                config.RequireInteraction = true;
+                config.ShowCloseIcon = true;
+            });
+        }
+    }
+
+    private async Task ExportSummary(string format)
+    {
+        if (string.IsNullOrEmpty(_summaryText)) return;
+
+        try
+        {
+            byte[] fileBytes = Array.Empty<byte>();
+            string fileName = $"MoM_Summary_{DateTime.Now:yyyyMMdd_HHmmss}";
+            string mimeType = "";
+
+            if (format == "txt")
+            {
+                fileBytes = System.Text.Encoding.UTF8.GetBytes(_summaryText);
+                fileName += ".txt";
+                mimeType = "text/plain";
+            }
+            else if (format == "docx")
+            {
+                fileBytes = CreateDocx(_summaryText);
+                fileName += ".docx";
+                mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            }
+            else if (format == "pdf")
+            {
+                fileBytes = CreatePdf(_summaryText);
+                fileName += ".pdf";
+                mimeType = "application/pdf";
+            }
+
+            await TriggerFileDownload(fileName, mimeType, fileBytes);
+            Snackbar.Add($"Exported as .{format.ToUpper()} successfully!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to export summary as {format.ToUpper()}. Details: {ex.Message}", Severity.Error, config =>
+            {
+                config.RequireInteraction = true;
+                config.ShowCloseIcon = true;
+            });
+        }
+    }
+
+    private byte[] CreateDocx(string text)
+    {
+        using (var mem = new System.IO.MemoryStream())
+        {
+            using (var wordDocument = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Create(mem, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
+            {
+                var mainPart = wordDocument.AddMainDocumentPart();
+                mainPart.Document = new DocumentFormat.OpenXml.Wordprocessing.Document();
+                var body = mainPart.Document.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Body());
+
+                var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    var para = body.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Paragraph());
+                    var run = para.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Run());
+                    run.AppendChild(new DocumentFormat.OpenXml.Wordprocessing.Text(line));
+                }
+            }
+            return mem.ToArray();
+        }
+    }
+
+    private byte[] CreatePdf(string text)
+    {
+        var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var page = builder.AddPage(595, 842);
+        var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+
+        double y = 842 - 50;
+        double x = 50;
+
+        var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+        foreach (var line in lines)
+        {
+            string currentLine = line;
+            if (string.IsNullOrEmpty(currentLine))
+            {
+                y -= 15;
+                continue;
+            }
+
+            while (currentLine.Length > 85)
+            {
+                var chunk = currentLine.Substring(0, 85);
+                page.AddText(chunk, 11, new UglyToad.PdfPig.Core.PdfPoint(x, y), font);
+                y -= 15;
+                currentLine = currentLine.Substring(85);
+
+                if (y < 50)
+                {
+                    page = builder.AddPage(595, 842);
+                    y = 842 - 50;
+                }
+            }
+
+            page.AddText(currentLine, 11, new UglyToad.PdfPig.Core.PdfPoint(x, y), font);
+            y -= 15;
+
+            if (y < 50)
+            {
+                page = builder.AddPage(595, 842);
+                y = 842 - 50;
+            }
+        }
+
+        return builder.Build();
+    }
+
+    private async Task TriggerFileDownload(string fileName, string mimeType, byte[] fileBytes)
+    {
+        var base64 = Convert.ToBase64String(fileBytes);
+        string js = $@"
+            try {{
+                var link = document.createElement('a');
+                link.download = '{fileName}';
+                link.href = 'data:{mimeType};base64,{base64}';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }} catch (e) {{
+                console.error('Download failed:', e);
+            }}
+        ";
+        await JSRuntime.InvokeVoidAsync("eval", js);
+    }
+}

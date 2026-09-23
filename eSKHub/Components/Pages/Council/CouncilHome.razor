@@ -1,0 +1,1165 @@
+﻿@page "/council/home"
+@layout eSKHub.Components.Layout.CouncilLayout
+@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@using System.Text.Json
+@using eSKHub.Model
+@using eSKHub.Components.Services
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject eSKHub.Components.Services.UserStateService UserState
+@inject NavigationManager NavigationManager
+
+<PageTitle>Council Dashboard</PageTitle>
+
+<style>
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 16px;
+        margin-top: 16px;
+        position: relative;
+        overflow: hidden;
+    }
+
+        .dashboard-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+    .dashboard-header-content {
+        position: relative;
+        z-index: 10;
+    }
+
+    .stat-card {
+        text-align: center;
+        padding: 24px;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+        border: 1px solid var(--mud-palette-divider);
+        height: 100%;
+        min-height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.25);
+        }
+
+    .stat-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        opacity: 0.7;
+    }
+
+    .stat-change {
+        font-size: 0.75rem;
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .chart-card {
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid var(--mud-palette-divider);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .chart-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 300px;
+    }
+
+    .activity-item {
+        padding: 16px;
+        border-bottom: 1px solid var(--mud-palette-divider);
+        transition: background 0.2s ease;
+    }
+
+        .activity-item:hover {
+            background: rgba(126, 111, 255, 0.05);
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+    .activity-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 16px;
+    }
+
+    .filter-section {
+        margin-bottom: 24px;
+    }
+
+    .filter-toggle-button {
+        display: none;
+        margin-bottom: 8px;
+    }
+
+    .quick-action-btn {
+        border-radius: 12px;
+        padding: 16px;
+        transition: all 0.3s ease;
+    }
+
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(126, 111, 255, 0.25);
+        }
+
+    .pie-chart-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        min-height: 280px;
+    }
+
+    .pie-slice {
+        cursor: pointer;
+        transition: transform 0.2s ease;
+    }
+
+        .pie-slice:hover {
+            transform: scale(1.05);
+        }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+    }
+
+    .row-2-height {
+        min-height: 450px;
+    }
+
+    .row-3-height {
+        min-height: 450px;
+    }
+
+    .row-4-height {
+        min-height: 450px;
+    }
+
+    .row-5-height {
+        min-height: 400px;
+    }
+
+    @@media (max-width: 600px) {
+        .dashboard-header {
+            padding: 20px 16px;
+            margin-bottom: 24px;
+        }
+
+            .dashboard-header h4 {
+                font-size: 1.25rem !important;
+            }
+
+            .dashboard-header .mud-typography-body1 {
+                font-size: 0.875rem !important;
+            }
+
+        .stat-card {
+            padding: 16px;
+            min-height: 150px;
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+        }
+
+        .stat-number {
+            font-size: 1.75rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+        }
+
+        .chart-card {
+            padding: 16px;
+        }
+
+        .chart-content {
+            min-height: 200px;
+        }
+
+        .activity-item {
+            padding: 12px;
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            margin-right: 12px;
+        }
+
+        .filter-toggle-button {
+            display: inline-flex !important;
+            width: 100%;
+        }
+
+        .filter-section .mud-grid {
+            display: none;
+        }
+
+        .filter-section.filters-visible .mud-grid {
+            display: flex;
+        }
+
+        .row-2-height, .row-3-height, .row-4-height, .row-5-height {
+            min-height: auto;
+        }
+    }
+</style>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    @if (!_isAuthorized)
+    {
+        <MudAlert Severity="Severity.Warning" Class="ma-4">
+            <MudText>You are not authorized to view this page.</MudText>
+        </MudAlert>
+    }
+    else if (_isLoading)
+    {
+        <div style="display: flex; justify-content: center; align-items: center; min-height: 400px;">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else
+    {
+        <!-- Dashboard Header -->
+        <div class="dashboard-header">
+            <div class="dashboard-header-content">
+                <MudText Typo="Typo.h4" Style="font-weight: 700; margin-bottom: 8px;">
+                    Hi, @UserState.Fullname!
+                </MudText>
+                <MudText Typo="Typo.body1" Style="opacity: 0.95;">
+                    Welcome to your dashboard for @_councilArea
+                </MudText>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <MudPaper Class="@($"filter-section pa-4 {(_showFilters ? "filters-visible" : "")}")" Elevation="1">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@(_showFilters ? Icons.Material.Filled.FilterAltOff : Icons.Material.Filled.FilterAlt)"
+                       FullWidth="true"
+                       OnClick="@(() => _showFilters = !_showFilters)"
+                       Class="filter-toggle-button">
+                @(_showFilters ? "Hide Filters" : "Show Filters")
+            </MudButton>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="6">
+                    <MudSelect T="string"
+                               @bind-Value="_periodFilter"
+                               @bind-Value:after="LoadDashboardData"
+                               Label="Time Period"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("Today")">Today</MudSelectItem>
+                        <MudSelectItem Value="@("Week")">This Week</MudSelectItem>
+                        <MudSelectItem Value="@("Month")">This Month</MudSelectItem>
+                        <MudSelectItem Value="@("Year")">This Year</MudSelectItem>
+                        <MudSelectItem Value="@("All")">All Time</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="6">
+                    <MudSelect T="string"
+                               @bind-Value="_categoryFilter"
+                               @bind-Value:after="LoadDashboardData"
+                               Label="Category"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               Margin="Margin.Dense">
+                        <MudSelectItem Value="@("All")">All Categories</MudSelectItem>
+                        <MudSelectItem Value="@("Youth Development")">Youth Development</MudSelectItem>
+                        <MudSelectItem Value="@("Environment")">Environment</MudSelectItem>
+                        <MudSelectItem Value="@("Sports")">Sports</MudSelectItem>
+                        <MudSelectItem Value="@("Employment")">Employment</MudSelectItem>
+                        <MudSelectItem Value="@("Health")">Health</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    @if (HasActiveFilters())
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Clear"
+                                   OnClick="ClearFilters"
+                                   Style="margin-top: 4px;">
+                            Clear Filters
+                        </MudButton>
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <!-- Row 1: Key Metrics -->
+        <MudGrid Class="mb-4" Style="align-items: stretch;">
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="stat-card" Elevation="2">
+                    <div>
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Surface" Size="Size.Large" />
+                        </div>
+                        <div class="stat-number" style="color: #667eea;">@_totalYouth</div>
+                        <div class="stat-label">Registered Youth</div>
+                    </div>
+                    <div class="stat-change" style="color: #10b981;">
+                        <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" />
+                        @_youthGrowth% this month
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="stat-card" Elevation="2">
+                    <div>
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            <MudIcon Icon="@Icons.Material.Filled.Work" Color="Color.Surface" Size="Size.Large" />
+                        </div>
+                        <div class="stat-number" style="color: #10b981;">@_totalPrograms</div>
+                        <div class="stat-label">My Programs</div>
+                    </div>
+                    <div class="stat-change" style="color: #667eea;">
+                        @_pendingPrograms pending review
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="stat-card" Elevation="2">
+                    <div>
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                            <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Surface" Size="Size.Large" />
+                        </div>
+                        <div class="stat-number" style="color: #f59e0b;">@_upcomingEvents</div>
+                        <div class="stat-label">Upcoming Events</div>
+                    </div>
+                    <div class="stat-change" style="color: #6b7280;">
+                        Next: @_nextEventDate
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="6" sm="6" md="3">
+                <MudPaper Class="stat-card" Elevation="2">
+                    <div>
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                            <MudIcon Icon="@Icons.Material.Filled.Feedback" Color="Color.Surface" Size="Size.Large" />
+                        </div>
+                        <div class="stat-number" style="color: #ef4444;">@_unreadFeedback</div>
+                        <div class="stat-label">Unread Feedback</div>
+                    </div>
+                    <div class="stat-change" style="color: #6b7280;">
+                        @_totalFeedback total received
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Replace the entire "Row 2: First Chart Row" and "Row 3: Second Chart Row" sections in CouncilHome.razor with this: -->
+        <!-- Row 2: First Chart Row -->
+        <MudGrid Class="mb-4" Style="align-items: stretch;">
+            <MudItem xs="12" md="4">
+                <MudPaper Class="chart-card row-2-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Programs by Category
+                    </MudText>
+                    <div class="chart-content">
+                        @if (_programsByCategory != null && _programsByCategory.Any())
+                        {
+                            <MudChart ChartType="ChartType.Bar"
+                                      ChartSeries="_programsChartSeries"
+                                      XAxisLabels="_programsChartLabels"
+                                      Width="100%"
+                                      Height="300px" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                No program data available
+                            </MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudPaper Class="chart-card row-2-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Youth by Gender
+                    </MudText>
+                    <div class="chart-content">
+                        @if (_youthByGender != null && _youthByGender.Any())
+                        {
+                            <div class="pie-chart-container">
+                                <svg width="240" height="240" viewBox="0 0 240 240">
+                                    @{
+                                        var genderTotal = _youthByGender.Values.Sum();
+                                        var genderColors = new[] { "#667eea", "#10b981", "#f59e0b" };
+
+                                        // Special case: only 1 data point - draw a full circle
+                                        if (_youthByGender.Count == 1)
+                                        {
+                                            var singleGender = _youthByGender.First();
+                                            <circle cx="120" cy="120" r="100"
+                                                    fill="@genderColors[0]"
+                                                    class="pie-slice"
+                                                    opacity="0.8">
+                                                <title>@singleGender.Key: @singleGender.Value (100%)</title>
+                                            </circle>
+                                        }
+                                        else
+                                        {
+                                            var genderStartAngle = 0.0;
+                                            var genderColorIndex = 0;
+
+                                            foreach (var gender in _youthByGender)
+                                            {
+                                                var percentage = (double)gender.Value / genderTotal;
+                                                var angle = percentage * 360;
+                                                var endAngle = genderStartAngle + angle;
+                                                var largeArc = angle > 180 ? 1 : 0;
+
+                                                var x1 = 120 + 100 * Math.Cos(genderStartAngle * Math.PI / 180);
+                                                var y1 = 120 + 100 * Math.Sin(genderStartAngle * Math.PI / 180);
+                                                var x2 = 120 + 100 * Math.Cos(endAngle * Math.PI / 180);
+                                                var y2 = 120 + 100 * Math.Sin(endAngle * Math.PI / 180);
+                                                <path d="M 120 120 L @x1 @y1 A 100 100 0 @largeArc 1 @x2 @y2 Z"
+                                                      fill="@genderColors[genderColorIndex % genderColors.Length]"
+                                                      class="pie-slice"
+                                                      opacity="0.8">
+                                                    <title>@gender.Key: @gender.Value (@((percentage * 100).ToString("F1"))%)</title>
+                                                </path>
+
+                                                genderStartAngle = endAngle;
+                                                genderColorIndex++;
+                                            }
+                                        }
+                                    }
+                                </svg>
+                            </div>
+                            <div style="margin-top: 16px;">
+                                @{
+                                    var genderLegendColors = new[] { "#667eea", "#10b981", "#f59e0b" };
+                                    var genderLegendIndex = 0;
+                                    foreach (var gender in _youthByGender)
+                                    {
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background: @genderLegendColors[genderLegendIndex % genderLegendColors.Length];"></div>
+                                            <MudText Typo="Typo.body2">@gender.Key (@gender.Value)</MudText>
+                                        </div>
+                                        genderLegendIndex++;
+                                    }
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                No gender data available
+                            </MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Row 3: Second Chart Row -->
+        <MudGrid Class="mb-4" Style="align-items: stretch;">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="chart-card row-3-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Youth Age Distribution
+                    </MudText>
+                    <div class="chart-content">
+                        @if (_youthByAgeGroup != null && _youthByAgeGroup.Any())
+                        {
+                            <div class="pie-chart-container">
+                                <svg width="240" height="240" viewBox="0 0 240 240">
+                                    @{
+                                        var ageTotal = _youthByAgeGroup.Values.Sum();
+                                        var ageColors = new[] { "#667eea", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6" };
+
+                                        // Special case: only 1 data point - draw a full circle
+                                        if (_youthByAgeGroup.Count == 1)
+                                        {
+                                            var singleAge = _youthByAgeGroup.First();
+                                            <circle cx="120" cy="120" r="100"
+                                                    fill="@ageColors[0]"
+                                                    class="pie-slice"
+                                                    opacity="0.8">
+                                                <title>@singleAge.Key: @singleAge.Value (100%)</title>
+                                            </circle>
+                                        }
+                                        else
+                                        {
+                                            var ageStartAngle = 0.0;
+                                            var ageColorIndex = 0;
+
+                                            foreach (var ageGroup in _youthByAgeGroup)
+                                            {
+                                                var percentage = (double)ageGroup.Value / ageTotal;
+                                                var angle = percentage * 360;
+                                                var endAngle = ageStartAngle + angle;
+                                                var largeArc = angle > 180 ? 1 : 0;
+
+                                                var x1 = 120 + 100 * Math.Cos(ageStartAngle * Math.PI / 180);
+                                                var y1 = 120 + 100 * Math.Sin(ageStartAngle * Math.PI / 180);
+                                                var x2 = 120 + 100 * Math.Cos(endAngle * Math.PI / 180);
+                                                var y2 = 120 + 100 * Math.Sin(endAngle * Math.PI / 180);
+                                                <path d="M 120 120 L @x1 @y1 A 100 100 0 @largeArc 1 @x2 @y2 Z"
+                                                      fill="@ageColors[ageColorIndex % ageColors.Length]"
+                                                      class="pie-slice"
+                                                      opacity="0.8">
+                                                    <title>@ageGroup.Key: @ageGroup.Value (@((percentage * 100).ToString("F1"))%)</title>
+                                                </path>
+
+                                                ageStartAngle = endAngle;
+                                                ageColorIndex++;
+                                            }
+                                        }
+                                    }
+                                </svg>
+                            </div>
+                            <div style="margin-top: 16px;">
+                                @{
+                                    var ageLegendColors = new[] { "#667eea", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6" };
+                                    var ageLegendIndex = 0;
+                                    foreach (var ageGroup in _youthByAgeGroup)
+                                    {
+                                        <div class="legend-item">
+                                            <div class="legend-color" style="background: @ageLegendColors[ageLegendIndex % ageLegendColors.Length];"></div>
+                                            <MudText Typo="Typo.body2">@ageGroup.Key (@ageGroup.Value)</MudText>
+                                        </div>
+                                        ageLegendIndex++;
+                                    }
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                No age distribution data available
+                            </MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="chart-card row-3-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Youth Civil Status
+                    </MudText>
+                    <div class="chart-content">
+                        @if (_youthByCivilStatus != null && _youthByCivilStatus.Any())
+                        {
+                            <MudChart ChartType="ChartType.Bar"
+                                      ChartSeries="_civilStatusChartSeries"
+                                      XAxisLabels="_civilStatusChartLabels"
+                                      Width="100%"
+                                      Height="300px" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                No civil status data available
+                            </MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Row 4: Line Chart -->
+        <MudGrid Class="mb-4" Style="align-items: stretch;">
+            <MudItem xs="12">
+                <MudPaper Class="chart-card row-4-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Youth Registration Trend (Last 6 Months)
+                    </MudText>
+                    <div class="chart-content">
+                        @if (_registrationTrend.Any())
+                        {
+                            <svg width="100%" height="320" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet">
+                                @for (int i = 0; i <= 5; i++)
+                                {
+                                    var y = 50 + (i * 45);
+                                    <line x1="60" y1="@y" x2="570" y2="@y" stroke="var(--mud-palette-divider)" stroke-width="1" opacity="0.3" />
+                                }
+
+                                @{
+                                    var maxValue = _registrationTrend.Values.Max();
+                                    var points = new List<string>();
+                                    var index = 0;
+                                    var xStep = 510.0 / Math.Max(_registrationTrend.Count - 1, 1);
+
+                                    foreach (var point in _registrationTrend)
+                                    {
+                                        var x = 60 + (index * xStep);
+                                        var y = maxValue > 0 ? 275 - ((double)point.Value / maxValue * 225) : 275;
+                                        points.Add($"{x},{y}");
+                                        index++;
+                                    }
+                                }
+                                <polyline points="@string.Join(" ", points)"
+                                          fill="none"
+                                          stroke="#667eea"
+                                          stroke-width="3" />
+
+                                @{
+                                    index = 0;
+                                }
+                                @foreach (var point in _registrationTrend)
+                                {
+                                    var x = 60 + (index * xStep);
+                                    var y = maxValue > 0 ? 275 - ((double)point.Value / maxValue * 225) : 275;
+                                    <circle cx="@x" cy="@y" r="5" fill="#667eea" />
+                                    @((MarkupString)$"<text x=\"{x}\" y=\"300\" text-anchor=\"middle\" font-size=\"12\" fill=\"var(--mud-palette-text-secondary)\">{point.Key}</text>")
+                                    @((MarkupString)$"<text x=\"{x}\" y=\"{y - 10}\" text-anchor=\"middle\" font-size=\"12\" font-weight=\"600\" fill=\"#667eea\">{point.Value}</text>")
+                                    index++;
+                                }
+                            </svg>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                No registration trend data available
+                            </MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Row 5: Recent Activity and Quick Actions -->
+        <MudGrid Class="mb-4" Style="align-items: stretch;">
+            <MudItem xs="12" md="8">
+                <MudPaper Class="chart-card row-5-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Recent Activity
+                    </MudText>
+                    <div style="max-height: 330px; overflow-y: auto; flex: 1;">
+                        @if (_recentActivities.Any())
+                        {
+                            @foreach (var activity in _recentActivities)
+                            {
+                                <div class="activity-item" style="display: flex; align-items: center;">
+                                    <div class="activity-icon" style="@($"background: {activity.Color}")">
+                                        <MudIcon Icon="@activity.Icon" Color="Color.Surface" Size="Size.Small" />
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <MudText Typo="Typo.body2" Style="font-weight: 600;">@activity.Title</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@activity.Description</MudText>
+                                    </div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@activity.TimeAgo</MudText>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">No recent activity</MudAlert>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="4">
+                <MudPaper Class="chart-card row-5-height" Elevation="2">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600; margin-bottom: 16px;">
+                        Quick Actions
+                    </MudText>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   FullWidth="true"
+                                   Class="quick-action-btn"
+                                   Href="/council/announcements">
+                            New Announcement
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Success"
+                                   StartIcon="@Icons.Material.Filled.Event"
+                                   FullWidth="true"
+                                   Class="quick-action-btn"
+                                   Href="/council/events">
+                            Create Event
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.Work"
+                                   FullWidth="true"
+                                   Class="quick-action-btn"
+                                   Href="/council/programs-projects">
+                            Propose Program
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.Article"
+                                   FullWidth="true"
+                                   Class="quick-action-btn"
+                                   Href="/council/news">
+                            Publish News
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Feedback"
+                                   FullWidth="true"
+                                   Class="quick-action-btn"
+                                   Href="/council/feedbacks-manage">
+                            View Feedback
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private bool _showFilters = false;
+
+    // Filter values
+    private string _periodFilter = "Month";
+    private string _categoryFilter = "All";
+
+    // Key metrics
+    private int _totalYouth = 0;
+    private int _youthGrowth = 0;
+    private int _totalPrograms = 0;
+    private int _pendingPrograms = 0;
+    private int _upcomingEvents = 0;
+    private string _nextEventDate = "TBD";
+    private int _unreadFeedback = 0;
+    private int _totalFeedback = 0;
+
+    // Chart data
+    private Dictionary<string, int> _programsByCategory = new();
+    private Dictionary<string, int> _youthByGender = new();
+    private Dictionary<string, int> _youthByCivilStatus = new();
+    private Dictionary<string, int> _youthByAgeGroup = new();
+    private Dictionary<string, int> _registrationTrend = new();
+
+    // Chart series for MudChart
+    private List<ChartSeries> _programsChartSeries = new();
+    private string[] _programsChartLabels = Array.Empty<string>();
+    private List<ChartSeries> _civilStatusChartSeries = new();
+    private string[] _civilStatusChartLabels = Array.Empty<string>();
+
+    // Activity data
+    private List<ActivityItem> _recentActivities = new();
+
+    // Authorization
+    private bool _isAuthorized = false;
+    private bool _isLoading = true;
+    private string _councilArea = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isLoading)
+        {
+            return;
+        }
+
+        if (firstRender)
+        {
+            await UserState.InitializeAsync();
+
+            if (!UserState.IsAuthenticated)
+            {
+                NavigationManager.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            using var db = await DbFactory.CreateDbContextAsync();
+            var currentUser = await db.Users.FirstOrDefaultAsync(u => u.Username == UserState.Username);
+
+            if (currentUser == null || currentUser.Role != "Council")
+            {
+                _isAuthorized = false;
+                _isLoading = false;
+                StateHasChanged();
+                return;
+            }
+
+            _councilArea = currentUser.Area ?? string.Empty;
+            _isAuthorized = true;
+
+            await LoadDashboardData();
+        }
+    }
+
+    private async Task LoadDashboardData()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+
+        // Apply filters - ALL queries filtered by council area
+        var youthQuery = context.Youths.Where(y => y.Barangay == _councilArea);
+        var programQuery = context.ProgramsProjects.Where(p => p.ProposerArea == _councilArea);
+        var eventQuery = context.Events.Where(e => e.OrganizerArea == _councilArea);
+        var announcementQuery = context.Announcements.Where(a => a.AuthorArea == _councilArea);
+
+        // Feedback from youth in this barangay + forwarded feedback
+        var youthEmails = await context.Youths
+            .Where(y => y.Barangay == _councilArea)
+            .Select(y => y.Email)
+            .ToListAsync();
+        var feedbackQuery = context.Feedbacks.Where(f =>
+            youthEmails.Contains(f.Email) ||
+            (f.IsForwarded && f.ForwardedToBarangays != null &&
+             f.ForwardedToBarangays.Contains(_councilArea))
+        );
+
+        // Period filter
+        var startDate = _periodFilter switch
+        {
+            "Today" => DateTime.Today,
+            "Week" => DateTime.Today.AddDays(-7),
+            "Month" => DateTime.Today.AddMonths(-1),
+            "Year" => DateTime.Today.AddYears(-1),
+            _ => DateTime.MinValue
+        };
+
+        if (_periodFilter != "All")
+        {
+            youthQuery = youthQuery.Where(y => y.DateRegistered >= startDate);
+            programQuery = programQuery.Where(p => p.DateCreated >= startDate);
+            eventQuery = eventQuery.Where(e => e.DateCreated >= startDate);
+            announcementQuery = announcementQuery.Where(a => a.DateCreated >= startDate);
+            feedbackQuery = feedbackQuery.Where(f => f.DateSubmitted >= startDate);
+        }
+
+        // Category filter
+        if (_categoryFilter != "All")
+        {
+            programQuery = programQuery.Where(p => p.Category == _categoryFilter);
+        }
+
+        // Load key metrics
+        _totalYouth = await youthQuery.CountAsync();
+
+        var lastMonthYouth = await context.Youths
+            .Where(y => y.Barangay == _councilArea && y.DateRegistered >= DateTime.Today.AddMonths(-1))
+            .CountAsync();
+        var previousMonthYouth = await context.Youths
+            .Where(y => y.Barangay == _councilArea &&
+                       y.DateRegistered >= DateTime.Today.AddMonths(-2) &&
+                       y.DateRegistered < DateTime.Today.AddMonths(-1))
+            .CountAsync();
+        _youthGrowth = previousMonthYouth > 0 ? (int)((lastMonthYouth - previousMonthYouth) / (double)previousMonthYouth * 100) : 0;
+
+        _totalPrograms = await programQuery.Where(p => p.Status == "Approved").CountAsync();
+        _pendingPrograms = await programQuery.Where(p => p.Status == "Pending").CountAsync();
+
+        _upcomingEvents = await eventQuery.Where(e => e.EventDate > DateTime.Now).CountAsync();
+        var nextEvent = await eventQuery
+            .Where(e => e.EventDate > DateTime.Now)
+            .OrderBy(e => e.EventDate)
+            .FirstOrDefaultAsync();
+        _nextEventDate = nextEvent?.EventDate.ToString("MMM dd") ?? "TBD";
+
+        // Get current username for read tracking
+        var currentUsername = UserState.Username ?? "";
+        var allFeedback = await feedbackQuery.AsNoTracking().ToListAsync();
+        _unreadFeedback = allFeedback.Count(f => !f.IsReadByUser(currentUsername));
+        _totalFeedback = allFeedback.Count;
+
+        // Load chart data - Programs by Category
+        _programsByCategory = await programQuery
+            .Where(p => !string.IsNullOrEmpty(p.Category))
+            .GroupBy(p => p.Category!)
+            .Select(g => new { Category = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Category, x => x.Count);
+
+        if (_programsByCategory.Any())
+        {
+            _programsChartLabels = _programsByCategory.Keys.ToArray();
+            _programsChartSeries = new List<ChartSeries>
+            {
+                new ChartSeries
+                {
+                    Name = "Programs",
+                    Data = _programsByCategory.Values.Select(v => (double)v).ToArray()
+                }
+            };
+        }
+
+        // Youth by Gender
+        _youthByGender = await youthQuery
+            .Where(y => !string.IsNullOrEmpty(y.Gender))
+            .GroupBy(y => y.Gender!)
+            .Select(g => new { Gender = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Gender, x => x.Count);
+
+        // Youth by Civil Status
+        _youthByCivilStatus = await youthQuery
+            .Where(y => !string.IsNullOrEmpty(y.CivilStatus))
+            .GroupBy(y => y.CivilStatus!)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count);
+
+        if (_youthByCivilStatus.Any())
+        {
+            _civilStatusChartLabels = _youthByCivilStatus.Keys.ToArray();
+            _civilStatusChartSeries = new List<ChartSeries>
+            {
+                new ChartSeries
+                {
+                    Name = "Youth Count",
+                    Data = _youthByCivilStatus.Values.Select(v => (double)v).ToArray()
+                }
+            };
+        }
+
+        // Registration trend (last 6 months)
+        _registrationTrend = new Dictionary<string, int>();
+        for (int i = 5; i >= 0; i--)
+        {
+            var monthStart = DateTime.Today.AddMonths(-i).Date.AddDays(1 - DateTime.Today.Day);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            var count = await context.Youths
+                .Where(y => y.Barangay == _councilArea &&
+                           y.DateRegistered >= monthStart &&
+                           y.DateRegistered <= monthEnd)
+                .CountAsync();
+            _registrationTrend[monthStart.ToString("MMM")] = count;
+        }
+
+        // Youth by age group
+        var today = DateTime.Today;
+        var youthList = await youthQuery.AsNoTracking().ToListAsync();
+
+        _youthByAgeGroup = new Dictionary<string, int>();
+        if (youthList.Any())
+        {
+            var grouped = youthList.GroupBy(y =>
+            {
+                var age = today.Year - y.DateOfBirth.Year;
+                if (y.DateOfBirth > today.AddYears(-age)) age--;
+
+                return age switch
+                {
+                    <= 15 => "15 & Under",
+                    <= 18 => "16-18",
+                    <= 21 => "19-21",
+                    <= 24 => "22-24",
+                    _ => "25 & Above"
+                };
+            });
+
+            foreach (var group in grouped)
+            {
+                _youthByAgeGroup[group.Key] = group.Count();
+            }
+        }
+
+        // Load recent activities
+        await LoadRecentActivities(context);
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadRecentActivities(AppDbContext context)
+    {
+        _recentActivities = new List<ActivityItem>();
+
+        // Recent youth registrations from this barangay
+        var recentYouth = await context.Youths
+            .Where(y => y.Barangay == _councilArea)
+            .OrderByDescending(y => y.DateRegistered)
+            .Take(2)
+            .AsNoTracking()
+            .ToListAsync();
+
+        foreach (var youth in recentYouth)
+        {
+            _recentActivities.Add(new ActivityItem
+            {
+                Icon = Icons.Material.Filled.PersonAdd,
+                Color = "#667eea",
+                Title = "New Youth Registered",
+                Description = $"{youth.FullName}",
+                TimeAgo = GetTimeAgo(youth.DateRegistered)
+            });
+        }
+
+        // Recent events from this council
+        var recentEvents = await context.Events
+            .Where(e => e.OrganizerArea == _councilArea)
+            .OrderByDescending(e => e.DateCreated)
+            .Take(2)
+            .AsNoTracking()
+            .ToListAsync();
+
+        foreach (var evt in recentEvents)
+        {
+            _recentActivities.Add(new ActivityItem
+            {
+                Icon = Icons.Material.Filled.Event,
+                Color = "#10b981",
+                Title = "Event Created",
+                Description = evt.Title,
+                TimeAgo = GetTimeAgo(evt.DateCreated)
+            });
+        }
+
+        // Recent announcements from this council
+        var recentAnnouncements = await context.Announcements
+            .Where(a => a.AuthorArea == _councilArea && a.IsPublished)
+            .OrderByDescending(a => a.DateCreated)
+            .Take(2)
+            .AsNoTracking()
+            .ToListAsync();
+
+        foreach (var announcement in recentAnnouncements)
+        {
+            _recentActivities.Add(new ActivityItem
+            {
+                Icon = Icons.Material.Filled.Announcement,
+                Color = "#ef4444",
+                Title = "Announcement Posted",
+                Description = announcement.Subject,
+                TimeAgo = GetTimeAgo(announcement.DateCreated)
+            });
+        }
+
+        // Recent programs from this council
+        var recentPrograms = await context.ProgramsProjects
+            .Where(p => p.ProposerArea == _councilArea)
+            .OrderByDescending(p => p.DateCreated)
+            .Take(2)
+            .AsNoTracking()
+            .ToListAsync();
+
+        foreach (var program in recentPrograms)
+        {
+            _recentActivities.Add(new ActivityItem
+            {
+                Icon = Icons.Material.Filled.Work,
+                Color = "#f59e0b",
+                Title = "Program Proposed",
+                Description = program.Title,
+                TimeAgo = GetTimeAgo(program.DateCreated)
+            });
+        }
+
+        // Sort by most recent and take top 10
+        _recentActivities = _recentActivities
+            .OrderByDescending(a => ParseTimeAgo(a.TimeAgo))
+            .Take(10)
+            .ToList();
+    }
+
+    private string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.Now - dateTime;
+
+        if (timeSpan.TotalMinutes < 1) return "Just now";
+        if (timeSpan.TotalMinutes < 60) return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24) return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7) return $"{(int)timeSpan.TotalDays}d ago";
+
+        return dateTime.ToString("MMM dd, yyyy");
+    }
+
+    private DateTime ParseTimeAgo(string timeAgo)
+    {
+        if (timeAgo == "Just now")
+            return DateTime.Now;
+
+        var parts = timeAgo.Split(' ');
+        if (parts.Length < 2)
+            return DateTime.Now.AddDays(-30);
+
+        if (!int.TryParse(parts[0], out int value))
+            return DateTime.Now.AddDays(-30);
+
+        return parts[1] switch
+        {
+            "m" => DateTime.Now.AddMinutes(-value),
+            "h" => DateTime.Now.AddHours(-value),
+            "d" => DateTime.Now.AddDays(-value),
+            _ => DateTime.Now.AddDays(-30)
+        };
+    }
+
+    private bool HasActiveFilters()
+    {
+        return _periodFilter != "Month" || _categoryFilter != "All";
+    }
+
+    private async Task ClearFilters()
+    {
+        _periodFilter = "Month";
+        _categoryFilter = "All";
+        await LoadDashboardData();
+    }
+
+    private class ActivityItem
+    {
+        public string Icon { get; set; } = "";
+        public string Color { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string TimeAgo { get; set; } = "";
+    }
+}

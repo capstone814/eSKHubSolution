@@ -1,0 +1,493 @@
+﻿@page "/contact-us"
+@layout eSKHub.Components.Layout.PublicPageLayout
+@using eSKHub.Components.Services
+@using eSKHub.Components.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Text.Json
+@inject ThemeService ThemeService
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@implements IDisposable
+
+<PageTitle>Contact Us - eSKHub Bacacay</PageTitle>
+
+<style>
+    .contact-page {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .contact-hero {
+        position: relative;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        color: white;
+        border-radius: 24px;
+        padding: 80px 48px;
+        margin-top: 24px;
+        margin-bottom: 48px;
+        overflow: hidden;
+    }
+
+        .contact-hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+    .contact-hero-content {
+        position: relative;
+        z-index: 10;
+        text-align: center;
+    }
+
+    .contact-hero h1 {
+        font-size: 3rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .contact-hero p {
+        font-size: 1.25rem;
+        opacity: 0.95;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .contact-section {
+        margin-bottom: 64px;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 32px;
+        padding-bottom: 16px;
+        border-bottom: 3px solid;
+        border-image: linear-gradient(90deg, #667eea 0%, #764ba2 50%, transparent 100%) 1;
+    }
+
+        .section-header .mud-icon-root {
+            font-size: 2.5rem;
+        }
+
+    .section-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .contact-card {
+        background: var(--mud-palette-surface);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 24px;
+        border: 1px solid var(--mud-palette-divider);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+        .contact-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(126, 111, 255, 0.15);
+        }
+
+    .contact-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 16px;
+    }
+
+        .contact-icon .mud-icon-root {
+            color: #667eea;
+            font-size: 2rem;
+        }
+
+    .contact-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .contact-details {
+        font-size: 1rem;
+        line-height: 1.8;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .map-container {
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--mud-palette-divider);
+        height: 400px;
+        background: var(--mud-palette-surface);
+    }
+
+        .map-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+    .office-hours-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .office-hours-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--mud-palette-divider);
+        }
+
+        .office-hours-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .office-hours-table .day {
+            font-weight: 600;
+            width: 40%;
+        }
+
+    .social-links {
+        display: flex;
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    @@media (max-width: 600px) {
+        .contact-hero {
+            padding: 40px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+            .contact-hero h1 {
+                font-size: 1.75rem;
+            }
+
+            .contact-hero p {
+                font-size: 0.95rem;
+            }
+
+        .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+            .section-header .mud-icon-root {
+                font-size: 2rem;
+            }
+
+        .section-title {
+            font-size: 1.5rem;
+        }
+
+        .contact-card {
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .contact-icon {
+            width: 48px;
+            height: 48px;
+        }
+
+            .contact-icon .mud-icon-root {
+                font-size: 1.5rem;
+            }
+
+        .contact-title {
+            font-size: 1.25rem;
+        }
+
+        .contact-details {
+            font-size: 0.9rem;
+        }
+
+        .map-container {
+            height: 300px;
+        }
+    }
+</style>
+
+<div class="contact-page">
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge">
+        <!-- Hero Section -->
+        <div class="contact-hero">
+            <div class="contact-hero-content">
+                <h1>Get in Touch</h1>
+                <p>We're here to help and answer any questions you might have. We look forward to hearing from you!</p>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="contact-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" />
+                <h2 class="section-title">Contact Information</h2>
+            </div>
+
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <div class="contact-card">
+                        <div class="contact-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Phone" />
+                        </div>
+                        <div class="contact-title">Phone</div>
+                        <div class="contact-details">
+                            <strong>Main Office:</strong><br />
+                            @_phone<br />
+                            <br />
+                            <strong>Mobile:</strong><br />
+                            @_mobile
+                        </div>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <div class="contact-card">
+                        <div class="contact-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Email" />
+                        </div>
+                        <div class="contact-title">Email</div>
+                        <div class="contact-details">
+                            <strong>General Inquiries:</strong><br />
+                            @_email<br />
+                            <br />
+                            <strong>Support:</strong><br />
+                            @_supportEmail
+                        </div>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <div class="contact-card">
+                        <div class="contact-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.LocationOn" />
+                        </div>
+                        <div class="contact-title">Office Address</div>
+                        <div class="contact-details">
+                            @((MarkupString)_address.Replace("\n", "<br />"))
+                        </div>
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </div>
+
+        <!-- Office Hours -->
+        <div class="contact-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" />
+                <h2 class="section-title">Office Hours</h2>
+            </div>
+
+            <MudPaper Class="pa-4" Elevation="2">
+                <table class="office-hours-table">
+                    <tbody>
+                        @foreach (var hour in _officeHours)
+                        {
+                            <tr>
+                                <td class="day">@hour.Day</td>
+                                <td>@hour.Time</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </MudPaper>
+        </div>
+
+        <!-- Location Map -->
+        <div class="contact-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Map" Color="Color.Primary" />
+                <h2 class="section-title">Find Us</h2>
+            </div>
+
+            <div class="map-container">
+                <iframe src="@_mapEmbedUrl"
+                        allowfullscreen=""
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+            </div>
+        </div>
+
+        <!-- Connect With Us -->
+        <div class="contact-section">
+            <div class="section-header">
+                <MudIcon Icon="@Icons.Material.Filled.Share" Color="Color.Primary" />
+                <h2 class="section-title">Connect With Us</h2>
+            </div>
+
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudText Typo="Typo.h6" Style="margin-bottom: 16px;">Follow us on social media for the latest updates</MudText>
+                <div class="social-links">
+                    @if (_enableFacebook)
+                    {
+                        <MudIconButton Icon="@Icons.Custom.Brands.Facebook"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       Variant="Variant.Filled"
+                                       Style="border-radius: 12px;"
+                                       Href="@_facebookUrl"
+                                       Target="_blank" />
+                    }
+                    @if (_enableInstagram)
+                    {
+                        <MudIconButton Icon="@Icons.Custom.Brands.Instagram"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       Variant="Variant.Filled"
+                                       Style="border-radius: 12px;"
+                                       Href="@_instagramUrl"
+                                       Target="_blank" />
+                    }
+                    @if (_enableYoutube)
+                    {
+                        <MudIconButton Icon="@Icons.Custom.Brands.YouTube"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       Variant="Variant.Filled"
+                                       Style="border-radius: 12px;"
+                                       Href="@_youtubeUrl"
+                                       Target="_blank" />
+                    }
+                    @if (_enableTwitter)
+                    {
+                        <MudIconButton Icon="@Icons.Custom.Brands.Twitter"
+                                       Color="Color.Primary"
+                                       Size="Size.Large"
+                                       Variant="Variant.Filled"
+                                       Style="border-radius: 12px;"
+                                       Href="@_twitterUrl"
+                                       Target="_blank" />
+                    }
+                </div>
+            </MudPaper>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="contact-section">
+            <MudPaper Class="pa-6" Elevation="2">
+                <MudText Typo="Typo.h6" Style="margin-bottom: 16px; font-weight: 600;">Important Notes</MudText>
+                <MudText Typo="Typo.body1" Style="line-height: 1.8;">
+                    @((MarkupString)_importantNotes.Replace("\n", "<br />"))
+                </MudText>
+            </MudPaper>
+        </div>
+
+    </MudContainer>
+</div>
+
+@code {
+    // Contact Information
+    private string _phone = "(052) 123-4567";
+    private string _mobile = "+63 912 345 6789";
+    private string _email = "info@eskhub-bacacay.gov.ph";
+    private string _supportEmail = "support@eskhub-bacacay.gov.ph";
+    private string _address = "SK Federation Office\nMunicipal Hall of Bacacay\nBacacay, Albay 4510\nPhilippines";
+
+    // Office Hours
+    private class OfficeHour
+    {
+        public string Day { get; set; } = "";
+        public string Time { get; set; } = "";
+    }
+
+    private List<OfficeHour> _officeHours = new()
+    {
+        new OfficeHour { Day = "Monday - Friday", Time = "8:00 AM - 5:00 PM" },
+        new OfficeHour { Day = "Saturday", Time = "8:00 AM - 12:00 PM" },
+        new OfficeHour { Day = "Sunday & Holidays", Time = "Closed" },
+        new OfficeHour { Day = "Lunch Break", Time = "12:00 PM - 1:00 PM (Monday - Friday)" }
+    };
+
+    // Map
+    private string _mapEmbedUrl = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3882.891735121838!2d123.78992487489877!3d13.294702987051142!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x33a1ab5467c31be5%3A0x5523f9a1cb6e010b!2sBacacay%20Municipal%20Office%2C%20Bacacay%2C%20Albay!5e0!3m2!1sen!2sph!4v1767922594942!5m2!1sen!2sph";
+
+    // Social Media
+    private bool _enableFacebook = true;
+    private string _facebookUrl = "https://www.facebook.com/share/166ph6VzHv/";
+    private bool _enableInstagram = false;
+    private string _instagramUrl = "";
+    private bool _enableYoutube = false;
+    private string _youtubeUrl = "";
+    private bool _enableTwitter = false;
+    private string _twitterUrl = "";
+
+    // Important Notes
+    private string _importantNotes = "• Please bring a valid ID when visiting our office\n• For urgent matters outside office hours, please send an email and we will respond as soon as possible\n• Walk-in appointments are welcome, but scheduled appointments are preferred\n• Documents may take 3-5 business days to process\n• For feedback and suggestions, you can use our online feedback form available on the website";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ThemeService.OnThemeChanged += StateHasChanged;
+        await LoadPageContent();
+    }
+
+    private async Task LoadPageContent()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var content = await db.PageContents
+                .FirstOrDefaultAsync(p => p.PageName == "ContactUs");
+
+            if (content != null)
+            {
+                var data = JsonSerializer.Deserialize<Dictionary<string, string>>(content.Content);
+                if (data != null)
+                {
+                    _phone = data.GetValueOrDefault("Phone", _phone);
+                    _mobile = data.GetValueOrDefault("Mobile", _mobile);
+                    _email = data.GetValueOrDefault("Email", _email);
+                    _supportEmail = data.GetValueOrDefault("SupportEmail", _supportEmail);
+                    _address = data.GetValueOrDefault("Address", _address);
+                    _mapEmbedUrl = data.GetValueOrDefault("MapEmbedUrl", _mapEmbedUrl);
+                    _importantNotes = data.GetValueOrDefault("ImportantNotes", _importantNotes);
+
+                    // Load office hours
+                    if (data.ContainsKey("OfficeHours"))
+                    {
+                        var officeHoursJson = data["OfficeHours"];
+                        var loadedHours = JsonSerializer.Deserialize<List<OfficeHour>>(officeHoursJson);
+                        if (loadedHours != null && loadedHours.Any())
+                        {
+                            _officeHours = loadedHours;
+                        }
+                    }
+
+                    // Load social media
+                    _enableFacebook = data.GetValueOrDefault("EnableFacebook", "true") == "true";
+                    _facebookUrl = data.GetValueOrDefault("FacebookUrl", _facebookUrl);
+                    _enableInstagram = data.GetValueOrDefault("EnableInstagram", "false") == "true";
+                    _instagramUrl = data.GetValueOrDefault("InstagramUrl", _instagramUrl);
+                    _enableYoutube = data.GetValueOrDefault("EnableYoutube", "false") == "true";
+                    _youtubeUrl = data.GetValueOrDefault("YoutubeUrl", _youtubeUrl);
+                    _enableTwitter = data.GetValueOrDefault("EnableTwitter", "false") == "true";
+                    _twitterUrl = data.GetValueOrDefault("TwitterUrl", _twitterUrl);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading contact page content: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= StateHasChanged;
+    }
+}

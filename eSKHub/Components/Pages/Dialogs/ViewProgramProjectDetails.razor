@@ -1,0 +1,248 @@
+﻿@using eSKHub.Components.Model
+@using eSKHub.Model
+@using Microsoft.EntityFrameworkCore
+@inject IJSRuntime JS
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject IDialogService DialogService
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true" Style="border-top: 5px solid #7e6fff; border-left: 3px solid #7e6fff; border-radius:4px;">
+    <TitleContent>
+        PROGRAM/PROJECT DETAILS
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <!-- Header Section -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.h5" Style="font-weight: 600; margin-bottom: 8px;">@Program.Title</MudText>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(Program.Status)">
+                        @Program.Status
+                    </MudChip>
+                    <MudChip T="string" Size="Size.Small" Color="@GetCategoryColor(Program.Category)">
+                        @Program.Category
+                    </MudChip>
+                    @if (Program.IsPublished)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Visibility">
+                            Published
+                        </MudChip>
+                    }
+                    @if (_participantCount > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Icon="@Icons.Material.Filled.People">
+                            @_participantCount Participant@(_participantCount != 1 ? "s" : "")
+                        </MudChip>
+                    }
+                </div>
+            </MudItem>
+
+            <!-- Proposer Information -->
+            <MudItem xs="12">
+                <MudPaper Class="pa-3" Elevation="0" Style="background: rgba(126, 111, 255, 0.05); border-left: 3px solid #7e6fff;">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 4px;">Proposed By</MudText>
+                    <MudText Typo="Typo.body2">@Program.ProposedBy</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Program.ProposerPosition - @Program.ProposerArea</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 4px;">
+                        Submitted: @Program.DateCreated.ToString("MMMM dd, yyyy")
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Description -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Description</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.Description</MudText>
+            </MudItem>
+
+            <!-- Objectives -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Objectives</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.Objectives</MudText>
+            </MudItem>
+
+            <!-- Target Beneficiaries & Expected Outcomes -->
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Target Beneficiaries</MudText>
+                <MudText Typo="Typo.body2">@Program.TargetBeneficiaries</MudText>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Expected Outcomes</MudText>
+                <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">@Program.ExpectedOutcomes</MudText>
+            </MudItem>
+
+            <!-- Budget & Timeline -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="1" Style="height: 100%; display: flex; flex-direction: column;">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Budget</MudText>
+                    <div style="flex: 1; display: flex; align-items: center;">
+                        <MudText Typo="Typo.h6" Color="Color.Primary">₱@Program.Budget.ToString("N2")</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-3" Elevation="1" Style="height: 100%; display: flex; flex-direction: column;">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Timeline</MudText>
+                    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                        <MudText Typo="Typo.body2">@Program.Timeline</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @Program.StartDate.ToString("MMM dd, yyyy") - @Program.EndDate.ToString("MMM dd, yyyy")
+                        </MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Venue -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Venue</MudText>
+                <MudText Typo="Typo.body2">@Program.Venue</MudText>
+            </MudItem>
+
+            <!-- Partners (if any) -->
+            @if (!string.IsNullOrEmpty(Program.Partners))
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Partners/Collaborators</MudText>
+                    <MudText Typo="Typo.body2">@Program.Partners</MudText>
+                </MudItem>
+            }
+
+            <!-- Admin Feedback (if exists) -->
+            @if (!string.IsNullOrEmpty(Program.AdminFeedback))
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="@(Program.Status == "Approved" ? Severity.Success : Severity.Warning)">
+                        <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 4px;">Admin Feedback</MudText>
+                        <MudText Typo="Typo.body2">@Program.AdminFeedback</MudText>
+                        @if (!string.IsNullOrEmpty(Program.ReviewedBy))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="margin-top: 8px;">
+                                Reviewed by: @Program.ReviewedBy on @Program.ReviewedDate?.ToString("MMM dd, yyyy")
+                            </MudText>
+                        }
+                    </MudAlert>
+                </MudItem>
+            }
+
+            <!-- Supporting Documents -->
+            @if (Program.AttachmentData != null && Program.AttachmentData.Length > 0)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; margin-bottom: 8px;">Supporting Documents</MudText>
+                    @if (Program.AttachmentType == "image")
+                    {
+                        <img src="@GetAttachmentPath()" alt="Supporting document" style="max-width: 100%; border-radius: 8px;" />
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   OnClick="DownloadAttachment">
+                            Download Document
+                        </MudButton>
+                    }
+                </MudItem>
+            }
+
+            <!-- Audience Information -->
+            <MudItem xs="12">
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <strong>Audience:</strong> @(Program.Audience == "Barangay" ? $"Barangay: {Program.TargetBarangay}" : "Public")
+                </MudText>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        @if (Program.Id > 0 && _participantCount > 0)
+        {
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Info"
+                       StartIcon="@Icons.Material.Filled.People"
+                       OnClick="ViewParticipants">
+                View Participants (@_participantCount)
+            </MudButton>
+        }
+        <MudSpacer />
+        <MudButton OnClick="Close" Variant="Variant.Filled" Color="Color.Primary">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public ProgramProject Program { get; set; } = default!;
+
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private int _participantCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadParticipantCount();
+    }
+
+    private async Task LoadParticipantCount()
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            _participantCount = await db.ProgramParticipations
+                .Where(p => p.ProgramId == Program.Id)
+                .CountAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading participant count: {ex.Message}");
+        }
+    }
+
+    private async Task ViewParticipants()
+    {
+        var parameters = new DialogParameters { { "Program", Program } };
+        var options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<CouncilViewProgramParticipants>("Program Participants", parameters, options);
+    }
+
+    private Color GetStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Approved" => Color.Success,
+        "Disapproved" => Color.Error,
+        _ => Color.Default
+    };
+
+    private Color GetCategoryColor(string category) => category switch
+    {
+        "Youth Development" => Color.Primary,
+        "Environment" => Color.Success,
+        "Sports" => Color.Info,
+        "Employment" => Color.Warning,
+        "Health" => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetAttachmentPath()
+    {
+        if (Program.AttachmentData != null && !string.IsNullOrEmpty(Program.AttachmentMimeType))
+        {
+            return $"data:{Program.AttachmentMimeType};base64,{Convert.ToBase64String(Program.AttachmentData)}";
+        }
+        return string.Empty;
+    }
+
+    private async Task DownloadAttachment()
+    {
+        if (Program.AttachmentData != null && !string.IsNullOrEmpty(Program.AttachmentMimeType))
+        {
+            var base64 = Convert.ToBase64String(Program.AttachmentData);
+            var fileName = Program.Attachment ?? "document";
+            await JS.InvokeVoidAsync("downloadFile", fileName, Program.AttachmentMimeType, base64);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

@@ -1,0 +1,139 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using eSKHub.Components.Model
+@inject IDbContextFactory<eSKHub.Model.AppDbContext> DbFactory
+@inject IJSRuntime JS
+
+<MudDialog MaxWidth="MaxWidth.Large" FullWidth="true">
+    <TitleContent>
+        <MudText Typo="Typo.h5">@Category Documents</MudText>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div style="text-align: center; padding: 40px;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (!_documents.Any())
+        {
+            <MudAlert Severity="Severity.Info">
+                No @Category.ToLower() documents available at this time.
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid Spacing="3">
+                @foreach (var doc in _documents)
+                {
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-4" Elevation="2">
+                            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <div>
+                                    <MudText Typo="Typo.h6" Style="font-weight: 600;">@doc.Title</MudText>
+                                    @if (!string.IsNullOrEmpty(doc.Description))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                            @doc.Description
+                                        </MudText>
+                                    }
+                                    <div style="display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap;">
+                                        @if (doc.FiscalYear.HasValue)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                                FY @doc.FiscalYear
+                                            </MudChip>
+                                        }
+                                        @if (!string.IsNullOrEmpty(doc.Quarter))
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Secondary">
+                                                @doc.Quarter
+                                            </MudChip>
+                                        }
+                                        <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.RemoveRedEye">
+                                            @doc.ViewCount views
+                                        </MudChip>
+                                    </div>
+                                </div>
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Download"
+                                           OnClick="@(() => DownloadDocument(doc))">
+                                    Download
+                                </MudButton>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Category { get; set; } = string.Empty;
+
+    private List<TransparencyDocument> _documents = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocuments();
+    }
+
+    private async Task LoadDocuments()
+    {
+        _isLoading = true;
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            _documents = await db.TransparencyDocuments
+                .Where(t => t.IsPublished && t.Category == Category)
+                .OrderByDescending(t => t.FiscalYear)
+                .ThenByDescending(t => t.DateUploaded)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading documents: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DownloadDocument(TransparencyDocument doc)
+    {
+        if (doc.FileData != null && !string.IsNullOrEmpty(doc.FileMimeType))
+        {
+            // Increment view count
+            try
+            {
+                using var db = await DbFactory.CreateDbContextAsync();
+                var docInDb = await db.TransparencyDocuments.FindAsync(doc.Id);
+                if (docInDb != null)
+                {
+                    docInDb.ViewCount++;
+                    await db.SaveChangesAsync();
+                }
+            }
+            catch { }
+
+            // Download file
+            var base64 = Convert.ToBase64String(doc.FileData);
+            var fileName = doc.FileName ?? $"{doc.Title}.pdf";
+            await JS.InvokeVoidAsync("downloadFile", fileName, doc.FileMimeType, base64);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}
